@@ -1,0 +1,43 @@
+{
+  "explorer.confirmDragAndDrop": false,
+  "editor.renderWhitespace": "all",
+  "editor.autoClosingBrackets": "never",
+  "code-runner.runInTerminal": true,
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "extensions.ignoreRecommendations": false,
+  "editor.tabSize": 2,
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "javascript.preferences.quoteStyle": "double",
+  "typescript.preferences.quoteStyle": "double",
+  "autoimport.doubleQuotes": true,
+  "javascript.format.semicolons": "insert",
+  "typescript.format.semicolons": "insert",
+  "editor.formatOnPaste": false,
+  "prettier.useEditorConfig": false,
+  "sqltools.format": {
+    "language": "pl/sql",
+    "reservedWordCase": "upper"
+  },
+  "debug.javascript.autoAttachFilter": "smart",
+  "debug.onTaskErrors": "abort",
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "[typescript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[javascript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[sql]": {
+    "editor.defaultFormatter": "adpyke.vscode-sql-formatter"
+  },
+  "[xml]": {
+    "editor.defaultFormatter": "DotJoshJohnson.xml"
+  },
+  "sql-formatter.uppercase": true,
+  "sql-formatter.dialect": "pl/sql",
+  "sql-formatter.linesBetweenQueries": 2,
+  "[html]": {
+    "editor.defaultFormatter": "vscode.html-language-features"
+  },
+  "terminal.integrated.defaultProfile.windows": "Command Prompt",
+  "security.workspace.trust.untrustedFiles": "open",
+  "editor.formatOnSave": true
+}

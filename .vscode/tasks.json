@@ -1,0 +1,26 @@
+{
+  "tasks": [
+    {
+      "type": "npm",
+      "script": "build",
+      "group": "build",
+      "problemMatcher": [],
+      "label": "build",
+      "detail": "Compiles project from .ts to .js"
+    },
+    {
+      "type": "npm",
+      "script": "start",
+      "problemMatcher": [],
+      "label": "launch",
+      "detail": "Sets up config and runs build/server.js"
+    },
+    {
+      "type": "npm",
+      "script": "syncdb",
+      "problemMatcher": [],
+      "label": "sync",
+      "detail": "Runs TypeORM sync."
+    }
+  ]
+}

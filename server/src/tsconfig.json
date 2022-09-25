@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "outDir": "../build",
+    "target": "es6",
+    "allowSyntheticDefaultImports": true,
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "esModuleInterop": true,
+    "baseUrl": "./",
+    "sourceMap": true,
+    "strict": true
+  }
+}
