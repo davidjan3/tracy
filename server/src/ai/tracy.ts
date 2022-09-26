@@ -10,9 +10,9 @@ const inputLen = 10;
 
 let nn = new NeuralNetwork({
   binaryThresh: 0.5,
-  inputSize: inputLen,
+  inputSize: inputLen * 2, //price and trade volume
   outputSize: 2,
-  hiddenLayers: [8, 6, 4],
+  hiddenLayers: [10, 8, 6, 4],
   activation: "sigmoid",
 });
 

@@ -8,9 +8,9 @@ const RandomUtil_1 = __importDefault(require("util/RandomUtil"));
 const inputLen = 10;
 let nn = new brain_js_1.NeuralNetwork({
     binaryThresh: 0.5,
-    inputSize: inputLen,
+    inputSize: inputLen * 2,
     outputSize: 2,
-    hiddenLayers: [8, 6, 4],
+    hiddenLayers: [10, 8, 6, 4],
     activation: "sigmoid",
 });
 let sets = [];
@@ -50,4 +50,4 @@ function generateSet() {
     const output = [nextVal > input[input.length - 1] ? 1.0 : 0.0, nextVal < input[input.length - 1] ? 1.0 : 0.0];
     return { input: input, output: output };
 }
-//# sourceMappingURL=server.js.map
+//# sourceMappingURL=tracy.js.map
