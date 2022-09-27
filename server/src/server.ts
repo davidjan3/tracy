@@ -1,6 +1,13 @@
-import { NeuralNetwork } from "brain.js";
-import RandomUtil from "util/RandomUtil";
+import Tracy from "ai/tracy";
+import CSVUtil from "util/CSVUtil";
 
+const tracy = new Tracy();
+const history = CSVUtil.parse("./server/src/data/hourly_btc.csv", [3, 7], 2).slice(0, 30) as [number, number][];
+//console.log(history);
+//console.log(tracy.valuesToSets(history));
+console.log(tracy.valuesToSets(history));
+
+/*
 type Set = {
   input: number[];
   output: number[];
@@ -61,3 +68,4 @@ function generateSet(): Set {
   const output = [nextVal > input[input.length - 1] ? 1.0 : 0.0, nextVal < input[input.length - 1] ? 1.0 : 0.0];
   return { input: input, output: output };
 }
+*/
