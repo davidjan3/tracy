@@ -17,11 +17,11 @@ export default class Tracy {
   constructor() {
     this.net = new NeuralNetwork({
       binaryThresh: 0.5,
-      inputSize: Tracy.inputLen, //relative price deviation from previous price in chain, absolute last price in chain, lastVolume, indicator (1.0 if endPrice is closer to maxPrice than minPrice, otherwise -1,0)
+      inputSize: Tracy.inputLen + 1, //relative price deviation from previous price in chain, indicator
       outputSize: 1,
-      hiddenLayers: [10, 5],
-      activation: "sigmoid",
-      learningRate: 0.2,
+      hiddenLayers: [12, 6],
+      activation: "tanh",
+      learningRate: 0.01,
     });
   }
 
@@ -29,23 +29,68 @@ export default class Tracy {
     return this.net.train(sets, {
       log: true,
       logPeriod: 10,
-      errorThresh: 0.2,
+      errorThresh: 0.12,
     });
   }
 
   public test(sets: Set[], log?: boolean) {
-    let errorCount = 0;
+    let buyMatchedCount = 0;
+    let buyFailedCount = 0;
+    let sellMatchedCount = 0;
+    let sellFailedCount = 0;
+    let chillMatchedCount = 0;
+    let chillFailedCount = 0;
     for (let set of sets) {
       const output = this.net.run(set.input) as [number, number];
-      if (this.makeDecision(output[0]) == this.makeDecision(set.output[0])) {
-        if (log) console.log(`${set.input[Tracy.inputLen]}   actual: ${output}   expected: ${set.output}`);
-      } else {
-        if (log) console.error(`${set.input[Tracy.inputLen]}   actual: ${output}   expected: ${set.output}`);
-        errorCount++;
+      let loggood = () => (log ? console.log(`actual: ${output}   expected: ${set.output}`) : 0);
+      let logbad = () => (log ? console.error(`actual: ${output}   expected: ${set.output}`) : 0);
+      if (this.makeDecision(set.output[0]) == 1.0) {
+        if (this.makeDecision(output[0]) == 1.0) {
+          loggood();
+          buyMatchedCount++;
+        } else {
+          logbad();
+          buyFailedCount++;
+        }
+      }
+      if (this.makeDecision(set.output[0]) == -1.0) {
+        if (this.makeDecision(output[0]) == -1.0) {
+          loggood();
+          sellMatchedCount++;
+        } else {
+          logbad();
+          sellFailedCount++;
+        }
+      }
+      if (this.makeDecision(set.output[0]) == 0.0) {
+        if (this.makeDecision(output[0]) == 0.0) {
+          loggood();
+          chillMatchedCount++;
+        } else {
+          logbad();
+          chillFailedCount++;
+        }
       }
     }
-    if (log) console.log(`Errors: ${errorCount}/${sets.length} (${errorCount / sets.length})`);
-    return errorCount;
+    if (log)
+      console.log(
+        `Buy matched: ${buyMatchedCount}/${buyMatchedCount + buyFailedCount} (${
+          buyMatchedCount / (buyMatchedCount + buyFailedCount)
+        })`
+      );
+    if (log)
+      console.log(
+        `Sell matched: ${sellMatchedCount}/${sellMatchedCount + sellFailedCount} (${
+          sellMatchedCount / (sellMatchedCount + sellFailedCount)
+        })`
+      );
+    if (log)
+      console.log(
+        `Chill matched: ${chillMatchedCount}/${chillMatchedCount + chillFailedCount} (${
+          chillMatchedCount / (chillMatchedCount + chillFailedCount)
+        })`
+      );
+    return buyFailedCount + sellFailedCount + chillFailedCount;
   }
 
   public valuesToSets(arr: { endPrice: number; maxPrice: number; minPrice: number; volume: number }[]): {
@@ -69,9 +114,10 @@ export default class Tracy {
       for (let j = 0; j < Tracy.inputLen; j++) {
         set.input.push(diffArr[i + j]);
       }
-      /*set.input.push(lastValue[0], lastValue[3]);
-      const indicator = lastValue[1] - lastValue[0] - (lastValue[0] - lastValue[2]);
-      set.input.push(indicator);*/
+      //set.input.push(lastValue[0], lastValue[3]);
+      const priceRange = lastValue.maxPrice - lastValue.minPrice;
+      const indicator = priceRange != 0 ? ((lastValue.endPrice - lastValue.minPrice) / priceRange) * 2 - 1.0 : 0.0;
+      set.input.push(indicator);
       set.output = [
         this.makePrediction(lastValue, arr.slice(i + Tracy.inputLen, i + Tracy.inputLen + Tracy.minTradeLen)),
       ];
