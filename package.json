@@ -9,7 +9,7 @@
   },
   "scripts": {
     "start": "cross-env NODE_PATH=./server/build node --trace-warnings server/build/server.js",
-    "build": "tsc",
+    "build": "tsc -p  ./tsconfig.json",
     "debug": "npm build && npm start"
   },
   "repository": {

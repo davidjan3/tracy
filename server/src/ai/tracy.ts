@@ -8,60 +8,91 @@ export type Set = {
 
 export default class Tracy {
   static readonly inputLen = 10; //input length in units of time
-  static readonly minTradeLen = 5; //minimum trade length in units of time
+  static readonly minTradeLen = 3; //minimum trade length in units of time
   static readonly optimalDeviation = 0.005; //expected relative deviation to currentValue where full decision is made
-  static readonly decisionThresholdNo = 0.2; //maximum confidence where other value can be decided
-  static readonly decisionThresholdYes = 0.6; //minimum confidence where this value can be decided
-  static readonly decisionThresholdDiff = this.decisionThresholdYes - this.decisionThresholdNo; //minimum difference in confidence to decide
+  static readonly decisionThreshold = 0.2; //minimum deviation from 0 where decision is made
   public net: NeuralNetwork<INeuralNetworkData, INeuralNetworkData>;
 
   constructor() {
     this.net = new NeuralNetwork({
       binaryThresh: 0.5,
-      inputSize: Tracy.inputLen * 2, //price and trade volume
+      inputSize: Tracy.inputLen, //relative price deviation from previous price in chain, absolute last price in chain, lastVolume, indicator (1.0 if endPrice is closer to maxPrice than minPrice, otherwise -1,0)
       outputSize: 2,
-      hiddenLayers: [10, 8, 6, 4],
+      hiddenLayers: [10, 10, 2],
       activation: "sigmoid",
     });
   }
 
-  public valuesToSets(arr: [number, number][]): Set[] {
+  public train(sets: Set[]) {
+    return this.net.train(sets, {
+      log: true,
+      logPeriod: 10,
+    });
+  }
+
+  public test(sets: Set[], log?: boolean) {
+    let errorCount = 0;
+    for (let set of sets) {
+      const output = this.net.run(set.input) as [number, number];
+      /*if (this.makeDecision(output) == this.makeDecision(set.output as [number, number])) {
+        if (log) console.log(`${set.input[Tracy.inputLen]}   actual: ${output}   expected: ${set.output}`);
+      } else {
+        if (log) console.error(`${set.input[Tracy.inputLen]}   actual: ${output}   expected: ${set.output}`);
+        errorCount++;
+      }*/
+    }
+    if (log) console.log(`Errors: ${errorCount}/${sets.length} (${errorCount / sets.length})`);
+    return errorCount;
+  }
+
+  public valuesToSets(arr: number[][]): Set[] {
     if (arr.length < Tracy.inputLen + Tracy.minTradeLen) return [];
     const sets: Set[] = [];
-    for (let i = 0; i < arr.length - Tracy.inputLen - Tracy.minTradeLen; i++) {
+    for (let i = 1; i < arr.length - Tracy.inputLen - Tracy.minTradeLen; i++) {
       const set: Set = { input: [], output: [] };
+      const lastValue = arr[i + Tracy.inputLen - 1];
       for (let j = 0; j < Tracy.inputLen; j++) {
-        set.input.push(arr[i + j][0], arr[i + j][1]);
+        const priceDiff = (arr[i + j][0] - arr[i + j - 1][0]) / arr[i + j - 1][0];
+        set.input.push(priceDiff);
       }
-      set.output = this.makeDecision(
-        this.makeConfidences(
-          arr[i + Tracy.inputLen - 1],
-          arr.slice(i + Tracy.inputLen, i + Tracy.inputLen + Tracy.minTradeLen)
-        )
+      set.input.push(lastValue[0], lastValue[3]);
+      const indicator = lastValue[1] - lastValue[0] - (lastValue[0] - lastValue[2]);
+      set.input.push(indicator);
+      set.output = this.makeConfidences(
+        lastValue,
+        arr.slice(i + Tracy.inputLen, i + Tracy.inputLen + Tracy.minTradeLen)
       );
       sets.push(set);
     }
     return sets;
   }
 
-  public makeConfidences(lastValue: number[], nextValues: [number, number][]): [number, number] {
-    let long = 0.0;
-    let short = 0.0;
+  public averageDiffNext(lastValue: number[], nextValues: number[][]): number {
+    let diffSum = 0;
     for (let v of nextValues) {
-      let priceDiff = (v[0] - lastValue[0]) / lastValue[0];
+      diffSum += (v[0] - lastValue[0]) / lastValue[0];
+    }
+    return diffSum / nextValues.length > 0 ? 1.0 : -1.0;
+  }
+
+  public makeConfidences(lastValue: number[], nextValues: number[][]): [number, number] {
+    let buy = 0.0;
+    let sell = 0.0;
+    for (let v of nextValues) {
+      const priceDiff = (v[0] - lastValue[0]) / lastValue[0];
       if (priceDiff > 0) {
-        long += 1 / nextValues.length; //this.saturation(priceDiff, Tracy.optimalDeviation) / nextValues.length;
+        buy += this.saturation(priceDiff, Tracy.optimalDeviation) / nextValues.length;
       } else {
-        long = 0.0;
+        buy = 0.0;
         break;
       }
     }
     for (let v of nextValues) {
       let priceDiff = (v[0] - lastValue[0]) / lastValue[0];
       if (priceDiff < 0) {
-        short += 1 / nextValues.length; //this.saturation(-priceDiff, Tracy.optimalDeviation) / nextValues.length;
+        sell += this.saturation(-priceDiff, Tracy.optimalDeviation) / nextValues.length;
       } else {
-        short = 0.0;
+        sell = 0.0;
         break;
       }
     }
@@ -70,17 +101,17 @@ export default class Tracy {
       nextValues.map((v) => v[0]),
       [long, short]
     );*/
-    return [long, short];
+    return [buy, sell];
   }
 
-  public makeDecision(confidences: [number, number]): [number, number] {
+  /*public makeDecision(confidences: [number, number]): [number, number] {
     if (Math.abs(confidences[0] - confidences[1]) > Tracy.decisionThresholdDiff) {
       return [
         confidences[0] >= Tracy.decisionThresholdYes && confidences[1] <= Tracy.decisionThresholdNo ? 1.0 : 0.0,
         confidences[1] >= Tracy.decisionThresholdYes && confidences[0] <= Tracy.decisionThresholdNo ? 1.0 : 0.0,
       ];
     } else return [0.0, 0.0];
-  }
+  }*/
 
   /** n == 0 => 0, n == limit => 1, everything between rises exponentially towards 1.0 */
   private saturation(n: number, limit: number) {

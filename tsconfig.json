@@ -3,7 +3,7 @@
     "require": ["tsconfig-paths/register"]
   },
   "compilerOptions": {
-    "outDir": "../build",
+    "outDir": "./server/build",
     "target": "es6",
     "allowSyntheticDefaultImports": true,
     "module": "commonjs",
@@ -14,6 +14,7 @@
     "baseUrl": "./server/src",
     "paths": { "*": ["./*"] },
     "sourceMap": true,
-    "strict": true
+    "strict": true,
+    "skipLibCheck": true
   }
 }
