@@ -10,7 +10,7 @@ const history = CSVUtil.parse(
 console.log("History parsed");
 const sets = tracy.valuesToSets(history);
 console.log("History converted to sets");
-const trainTestDistribution = 0.3; //Use 60% for training, 40% for testing
+const trainTestDistribution = 0.5; //Use 60% for training, 40% for testing
 const trainSize = sets.sets.length * trainTestDistribution;
 const trainSets = sets.sets.slice(0, trainSize);
 const testSets = sets.sets.slice(trainSize, sets.sets.length);

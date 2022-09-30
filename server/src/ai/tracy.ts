@@ -1,4 +1,5 @@
 import { NeuralNetwork } from "brain.js";
+import { output } from "brain.js/dist/src/layer";
 import { INeuralNetworkData } from "brain.js/dist/src/neural-network";
 import MathUtil from "util/MathUtil";
 
@@ -10,7 +11,7 @@ export type Set = {
 export default class Tracy {
   static readonly inputLen = 20; //input length in units of time
   static readonly minTradeLen = 5; //minimum trade length in units of time
-  static readonly optimalDeviation = 0.005; //expected relative deviation to currentValue where full decision is made
+  static readonly optimalDeviation = 0.01; //expected relative deviation to currentValue where full decision is made
   static readonly decisionThreshold = 0.2; //minimum deviation from 0 where decision is made
   public net: NeuralNetwork<INeuralNetworkData, INeuralNetworkData>;
 
@@ -19,9 +20,9 @@ export default class Tracy {
       binaryThresh: 0.5,
       inputSize: Tracy.inputLen + 1, //relative price deviation from previous price in chain, indicator
       outputSize: 1,
-      hiddenLayers: [12, 6],
+      hiddenLayers: [18, 9],
       activation: "tanh",
-      learningRate: 0.01,
+      learningRate: 0.001,
     });
   }
 
@@ -29,7 +30,7 @@ export default class Tracy {
     return this.net.train(sets, {
       log: true,
       logPeriod: 10,
-      errorThresh: 0.12,
+      errorThresh: 0.095,
     });
   }
 
@@ -104,10 +105,10 @@ export default class Tracy {
       diffArr[i] = priceDiff;
       if (Number.isNaN(priceDiff)) debugger;
     }
-    let scale = 1.0 / MathUtil.getStandardDeviation(diffArr);
+    let scale = 1.0 / MathUtil.getStandardDeviation(diffArr, 0.0);
     diffArr = diffArr.map((v) => v * scale);
 
-    const sets: Set[] = [];
+    let sets: Set[] = [];
     for (let i = 0; i < arr.length - Tracy.inputLen - Tracy.minTradeLen; i++) {
       const set: Set = { input: [], output: [] };
       const lastValue = arr[i + Tracy.inputLen - 1];
@@ -123,6 +124,16 @@ export default class Tracy {
       ];
       sets.push(set);
     }
+    let outputScale =
+      1.0 /
+      MathUtil.getMaxDeviation(
+        sets.map((s) => s.output[0]),
+        0.0
+      );
+    sets = sets.map((s) => ({
+      input: s.input,
+      output: [Math.sign(s.output[0]) * this.saturation(Math.abs(s.output[0] * outputScale), 1.0)],
+    }));
     return { scale: scale, sets: sets };
   }
 
@@ -149,7 +160,7 @@ export default class Tracy {
     for (let v of nextValues) {
       const priceDiff = (v.endPrice - lastValue.endPrice) / lastValue.endPrice;
       if (priceDiff > 0) {
-        buy += this.saturation(priceDiff, Tracy.optimalDeviation) / nextValues.length;
+        buy += priceDiff / nextValues.length;
       } else {
         buy = 0.0;
         break;
@@ -158,7 +169,7 @@ export default class Tracy {
     for (let v of nextValues) {
       const priceDiff = (v.endPrice - lastValue.endPrice) / lastValue.endPrice;
       if (priceDiff < 0) {
-        sell += this.saturation(-priceDiff, Tracy.optimalDeviation) / nextValues.length;
+        sell -= priceDiff / nextValues.length;
       } else {
         sell = 0.0;
         break;
@@ -186,6 +197,6 @@ export default class Tracy {
     if (n <= 0) return 0.0;
     if (n >= limit) return 1.0;
     const p = n / limit;
-    return p * p;
+    return Math.pow(n, 1 / 10);
   }
 }
