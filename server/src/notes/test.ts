@@ -1,6 +1,3 @@
-const objs: { [index: number]: string } = { 1: "sauce", 5: "apple", 3: "young" };
+import chalk from "chalk";
 
-for (let key in objs) {
-  console.log(key);
-  console.log(objs[key]);
-}
+console.log(chalk.green(123));

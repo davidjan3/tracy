@@ -2,6 +2,7 @@ import { NeuralNetwork } from "brain.js";
 import { output } from "brain.js/dist/src/layer";
 import { INeuralNetworkData } from "brain.js/dist/src/neural-network";
 import MathUtil from "util/MathUtil";
+import Account from "./account";
 
 export type Set = {
   input: number[];
@@ -12,89 +13,63 @@ export default class Tracy {
   static readonly inputLen = 20; //input length in units of time
   static readonly minTradeLen = 5; //minimum trade length in units of time
   static readonly optimalDeviation = 0.01; //expected relative deviation to currentValue where full decision is made
-  static readonly decisionThreshold = 0.2; //minimum deviation from 0 where decision is made
+  static readonly decisionThreshold = 0.6; //minimum deviation from 0 where decision is made
+  static readonly maxAmount = 1.0; //Max amount / leverage to buy&sell
   public net: NeuralNetwork<INeuralNetworkData, INeuralNetworkData>;
+  public account: Account;
+  public scale: number;
 
-  constructor() {
+  constructor(account: Account) {
     this.net = new NeuralNetwork({
       binaryThresh: 0.5,
       inputSize: Tracy.inputLen + 1, //relative price deviation from previous price in chain, indicator
       outputSize: 1,
-      hiddenLayers: [18, 9],
+      hiddenLayers: [18, 10],
       activation: "tanh",
-      learningRate: 0.001,
+      learningRate: 0.012,
     });
+    this.account = account;
+    this.scale = 1.0;
   }
 
-  public train(sets: Set[]) {
-    return this.net.train(sets, {
+  public train(arr: { endPrice: number; maxPrice: number; minPrice: number; volume: number }[]) {
+    const sets = this.valuesToSets(arr);
+    this.scale = sets.scale;
+    return this.net.train(sets.sets, {
       log: true,
       logPeriod: 10,
-      errorThresh: 0.095,
+      errorThresh: 0.12,
     });
   }
 
-  public test(sets: Set[], log?: boolean) {
-    let buyMatchedCount = 0;
-    let buyFailedCount = 0;
-    let sellMatchedCount = 0;
-    let sellFailedCount = 0;
-    let chillMatchedCount = 0;
-    let chillFailedCount = 0;
-    for (let set of sets) {
-      const output = this.net.run(set.input) as [number, number];
-      let loggood = () => (log ? console.log(`actual: ${output}   expected: ${set.output}`) : 0);
-      let logbad = () => (log ? console.error(`actual: ${output}   expected: ${set.output}`) : 0);
-      if (this.makeDecision(set.output[0]) == 1.0) {
-        if (this.makeDecision(output[0]) == 1.0) {
-          loggood();
-          buyMatchedCount++;
-        } else {
-          logbad();
-          buyFailedCount++;
-        }
-      }
-      if (this.makeDecision(set.output[0]) == -1.0) {
-        if (this.makeDecision(output[0]) == -1.0) {
-          loggood();
-          sellMatchedCount++;
-        } else {
-          logbad();
-          sellFailedCount++;
-        }
-      }
-      if (this.makeDecision(set.output[0]) == 0.0) {
-        if (this.makeDecision(output[0]) == 0.0) {
-          loggood();
-          chillMatchedCount++;
-        } else {
-          logbad();
-          chillFailedCount++;
-        }
-      }
+  public test(arr: { endPrice: number; maxPrice: number; minPrice: number; volume: number }[]) {
+    const oldAmount = this.account.amount;
+    const sets = this.valuesToSets(arr, this.scale);
+    /*for (let i = 0; i < sets.sets.length; i++) {
+      const price = arr[i + Tracy.inputLen - 1].endPrice;
+      this.actOnPrediction(sets.sets[i].output[0], price);
     }
-    if (log)
-      console.log(
-        `Buy matched: ${buyMatchedCount}/${buyMatchedCount + buyFailedCount} (${
-          buyMatchedCount / (buyMatchedCount + buyFailedCount)
-        })`
-      );
-    if (log)
-      console.log(
-        `Sell matched: ${sellMatchedCount}/${sellMatchedCount + sellFailedCount} (${
-          sellMatchedCount / (sellMatchedCount + sellFailedCount)
-        })`
-      );
-    if (log)
-      console.log(
-        `Chill matched: ${chillMatchedCount}/${chillMatchedCount + chillFailedCount} (${
-          chillMatchedCount / (chillMatchedCount + chillFailedCount)
-        })`
-      );
-    return buyFailedCount + sellFailedCount + chillFailedCount;
+    this.account.closeBuys(arr[arr.length - 1].endPrice);
+    this.account.closeSells(arr[arr.length - 1].endPrice);
+    this.account.logBalance();
+    this.account.amount = 1000;
+    this.account.resetProfit();*/
+
+    for (let i = 0; i < sets.sets.length; i++) {
+      const output = (this.net.run(sets.sets[i].input) as number[])[0];
+      const price = arr[i + Tracy.inputLen - 1].endPrice;
+      this.actOnPrediction(output, price);
+    }
+    this.account.closeBuys(arr[arr.length - 1].endPrice);
+    this.account.closeSells(arr[arr.length - 1].endPrice);
+    this.account.logBalance();
   }
 
-  public valuesToSets(arr: { endPrice: number; maxPrice: number; minPrice: number; volume: number }[]): {
+  public valuesToSets(
+    arr: { endPrice: number; maxPrice: number; minPrice: number; volume: number }[],
+    scale?: number,
+    withoutOutputs: boolean = false
+  ): {
     sets: Set[];
     scale: number;
   } {
@@ -103,13 +78,12 @@ export default class Tracy {
     for (let i = 0; i < arr.length - 1; i++) {
       const priceDiff = (arr[i + 1].endPrice - arr[i].endPrice) / arr[i].endPrice;
       diffArr[i] = priceDiff;
-      if (Number.isNaN(priceDiff)) debugger;
     }
-    let scale = 1.0 / MathUtil.getStandardDeviation(diffArr, 0.0);
-    diffArr = diffArr.map((v) => v * scale);
+    scale ??= 1.0 / MathUtil.getStandardDeviation(diffArr, 0.0);
+    diffArr = diffArr.map((v) => v * scale!);
 
     let sets: Set[] = [];
-    for (let i = 0; i < arr.length - Tracy.inputLen - Tracy.minTradeLen; i++) {
+    for (let i = 0; i < arr.length - Tracy.inputLen - (withoutOutputs ? 0 : Tracy.minTradeLen); i++) {
       const set: Set = { input: [], output: [] };
       const lastValue = arr[i + Tracy.inputLen - 1];
       for (let j = 0; j < Tracy.inputLen; j++) {
@@ -119,21 +93,23 @@ export default class Tracy {
       const priceRange = lastValue.maxPrice - lastValue.minPrice;
       const indicator = priceRange != 0 ? ((lastValue.endPrice - lastValue.minPrice) / priceRange) * 2 - 1.0 : 0.0;
       set.input.push(indicator);
-      set.output = [
-        this.makePrediction(lastValue, arr.slice(i + Tracy.inputLen, i + Tracy.inputLen + Tracy.minTradeLen)),
-      ];
+      set.output = withoutOutputs
+        ? []
+        : [this.makePrediction(lastValue, arr.slice(i + Tracy.inputLen, i + Tracy.inputLen + Tracy.minTradeLen))];
       sets.push(set);
     }
-    let outputScale =
-      1.0 /
-      MathUtil.getMaxDeviation(
-        sets.map((s) => s.output[0]),
-        0.0
-      );
-    sets = sets.map((s) => ({
-      input: s.input,
-      output: [Math.sign(s.output[0]) * this.saturation(Math.abs(s.output[0] * outputScale), 1.0)],
-    }));
+    if (!withoutOutputs) {
+      let outputScale =
+        1.0 /
+        MathUtil.getMaxDeviation(
+          sets.map((s) => s.output[0]),
+          0.0
+        );
+      sets = sets.map((s) => ({
+        input: s.input,
+        output: [Math.sign(s.output[0]) * this.saturation(Math.abs(s.output[0] * outputScale), 1.0)],
+      }));
+    }
     return { scale: scale, sets: sets };
   }
 
@@ -145,7 +121,19 @@ export default class Tracy {
     return diffSum / nextValues.length > 0 ? 1.0 : -1.0;
   }
 
-  public makeDecision(prediction: number): number {
+  public actOnPrediction(prediction: number, price: number) {
+    const decision = this.makeDecision(prediction);
+    const amount = Math.min(Math.abs(this.account.amount * 0.01 * prediction), Tracy.maxAmount);
+    if (decision == 1.0) {
+      this.account.closeSells(price);
+      this.account.buy(price, amount);
+    } else if (decision == -1.0) {
+      this.account.closeBuys(price);
+      this.account.sell(price, amount);
+    }
+  }
+
+  public makeDecision(prediction: number): -1.0 | 0.0 | 1.0 {
     if (prediction > Tracy.decisionThreshold) return 1.0;
     if (prediction < -Tracy.decisionThreshold) return -1.0;
     return 0;

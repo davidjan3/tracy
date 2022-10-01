@@ -1,23 +1,23 @@
+import Account from "ai/account";
 import Tracy from "ai/tracy";
 import CSVUtil from "util/CSVUtil";
 
-const tracy = new Tracy();
+const tracy = new Tracy(new Account(1000));
 const history = CSVUtil.parse(
   "./server/src/data/hourly_btc.csv",
   { endPrice: 6, maxPrice: 4, minPrice: 5, volume: 7 },
   2
 ) as { endPrice: number; maxPrice: number; minPrice: number; volume: number }[]; //endPrice, maxPrice, minPrice, volume
 console.log("History parsed");
-const sets = tracy.valuesToSets(history);
 console.log("History converted to sets");
-const trainTestDistribution = 0.5; //Use 60% for training, 40% for testing
-const trainSize = sets.sets.length * trainTestDistribution;
-const trainSets = sets.sets.slice(0, trainSize);
-const testSets = sets.sets.slice(trainSize, sets.sets.length);
+const trainTestDistribution = 0.5; //0.6 => Use 60% for training, 40% for testing
+const trainSize = history.length * trainTestDistribution;
+const trainSets = history.slice(0, trainSize);
+const testSets = history.slice(trainSize, history.length);
 console.log("Sets sliced");
 tracy.train(trainSets);
 console.log("Training done");
-tracy.test(testSets, true);
+tracy.test(testSets);
 console.log("Testing done");
 
 /*
