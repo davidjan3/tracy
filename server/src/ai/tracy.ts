@@ -13,7 +13,7 @@ export default class Tracy {
   static readonly inputLen = 20; //input length in units of time
   static readonly minTradeLen = 5; //minimum trade length in units of time
   static readonly optimalDeviation = 0.01; //expected relative deviation to currentValue where full decision is made
-  static readonly decisionThreshold = 0.6; //minimum deviation from 0 where decision is made
+  static readonly decisionThreshold = 0.1; //minimum deviation from 0 where decision is made
   static readonly maxAmount = 1.0; //Max amount / leverage to buy&sell
   public net: NeuralNetwork<INeuralNetworkData, INeuralNetworkData>;
   public account: Account;
@@ -38,12 +38,11 @@ export default class Tracy {
     return this.net.train(sets.sets, {
       log: true,
       logPeriod: 10,
-      errorThresh: 0.12,
+      errorThresh: 0.18,
     });
   }
 
   public test(arr: { endPrice: number; maxPrice: number; minPrice: number; volume: number }[]) {
-    const oldAmount = this.account.amount;
     const sets = this.valuesToSets(arr, this.scale);
     /*for (let i = 0; i < sets.sets.length; i++) {
       const price = arr[i + Tracy.inputLen - 1].endPrice;
@@ -83,11 +82,11 @@ export default class Tracy {
     diffArr = diffArr.map((v) => v * scale!);
 
     let sets: Set[] = [];
-    for (let i = 0; i < arr.length - Tracy.inputLen - (withoutOutputs ? 0 : Tracy.minTradeLen); i++) {
+    for (let i = 1; i < arr.length - Tracy.inputLen - (withoutOutputs ? 0 : Tracy.minTradeLen); i++) {
       const set: Set = { input: [], output: [] };
       const lastValue = arr[i + Tracy.inputLen - 1];
       for (let j = 0; j < Tracy.inputLen; j++) {
-        set.input.push(diffArr[i + j]);
+        set.input.push(diffArr[i + j - 1]);
       }
       //set.input.push(lastValue[0], lastValue[3]);
       const priceRange = lastValue.maxPrice - lastValue.minPrice;
