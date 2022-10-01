@@ -13,7 +13,7 @@ export default class Tracy {
   static readonly inputLen = 20; //input length in units of time
   static readonly minTradeLen = 5; //minimum trade length in units of time
   static readonly optimalDeviation = 0.01; //expected relative deviation to currentValue where full decision is made
-  static readonly decisionThreshold = 0.1; //minimum deviation from 0 where decision is made
+  static readonly decisionThreshold = 0.4; //minimum deviation from 0 where decision is made
   static readonly maxAmount = 1.0; //Max amount / leverage to buy&sell
   public net: NeuralNetwork<INeuralNetworkData, INeuralNetworkData>;
   public account: Account;
@@ -24,9 +24,9 @@ export default class Tracy {
       binaryThresh: 0.5,
       inputSize: Tracy.inputLen + 1, //relative price deviation from previous price in chain, indicator
       outputSize: 1,
-      hiddenLayers: [18, 10],
+      hiddenLayers: [10, 4, 2],
       activation: "tanh",
-      learningRate: 0.012,
+      learningRate: 0.00025,
     });
     this.account = account;
     this.scale = 1.0;
@@ -38,11 +38,12 @@ export default class Tracy {
     return this.net.train(sets.sets, {
       log: true,
       logPeriod: 10,
-      errorThresh: 0.18,
+      errorThresh: 0.175,
     });
   }
 
   public test(arr: { endPrice: number; maxPrice: number; minPrice: number; volume: number }[]) {
+    const oldAmount = this.account.amount;
     const sets = this.valuesToSets(arr, this.scale);
     /*for (let i = 0; i < sets.sets.length; i++) {
       const price = arr[i + Tracy.inputLen - 1].endPrice;
@@ -62,6 +63,8 @@ export default class Tracy {
     this.account.closeBuys(arr[arr.length - 1].endPrice);
     this.account.closeSells(arr[arr.length - 1].endPrice);
     this.account.logBalance();
+    this.account.resetProfit();
+    this.account.amount = oldAmount;
   }
 
   public valuesToSets(

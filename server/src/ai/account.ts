@@ -5,6 +5,7 @@ export default class Account {
   private loss: number;
   private gain: number;
   public openPositions: { type: 1 | -1; amount: number; openingPrice: number }[];
+  private static readonly log = true;
 
   constructor(amount: number = 1000) {
     this.amount = amount;
@@ -46,11 +47,12 @@ export default class Account {
       this.loss -= profit;
       logF = chalk.red;
     }
-    console.log(
-      chalk.dim(`Closed ${pos.type == 1 ? "B" : "S"} position ${index}: `) +
-        `${pos.amount} x (${pos.openingPrice} -> ${price}) = ` +
-        logF(`${(profit < 0 ? "" : "+") + profit}`)
-    );
+    if (Account.log)
+      console.log(
+        chalk.dim(`Closed ${pos.type == 1 ? "B" : "S"} position ${index}: `) +
+          `${pos.amount} x (${pos.openingPrice} -> ${price}) = ` +
+          logF(`${(profit < 0 ? "" : "+") + profit}`)
+      );
     this.amount += profit + pos.amount;
     this.openPositions.splice(index, 1);
     return profit;

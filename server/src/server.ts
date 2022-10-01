@@ -18,6 +18,11 @@ console.log("Sets sliced");
 tracy.train(trainSets);
 console.log("Training done");
 tracy.test(testSets);
+/*const step = 30 * 24;
+for (let i = 0; i < testSets.length / step; i++) {
+  const testSet = testSets.slice(i * step, (i + 1) * step);
+  tracy.test(testSet);
+}*/
 console.log("Testing done");
 
 /*
