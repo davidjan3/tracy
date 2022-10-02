@@ -1,6 +1,7 @@
 import { NeuralNetwork } from "brain.js";
 import { output } from "brain.js/dist/src/layer";
 import { INeuralNetworkData } from "brain.js/dist/src/neural-network";
+import chalk from "chalk";
 import MathUtil from "util/MathUtil";
 import Account from "./account";
 
@@ -10,11 +11,11 @@ export type Set = {
 };
 
 export default class Tracy {
-  static readonly inputLen = 20; //input length in units of time
+  static readonly inputLen = 30; //input length in units of time
   static readonly minTradeLen = 5; //minimum trade length in units of time
   static readonly optimalDeviation = 0.01; //expected relative deviation to currentValue where full decision is made
-  static readonly decisionThreshold = 0.4; //minimum deviation from 0 where decision is made
-  static readonly maxAmount = 1.0; //Max amount / leverage to buy&sell
+  static readonly decisionThreshold = 0.1; //minimum deviation from 0 where decision is made
+  static readonly maxAmount = 20.0; //Max amount / leverage to buy&sell
   public net: NeuralNetwork<INeuralNetworkData, INeuralNetworkData>;
   public account: Account;
   public scale: number;
@@ -24,9 +25,10 @@ export default class Tracy {
       binaryThresh: 0.5,
       inputSize: Tracy.inputLen + 1, //relative price deviation from previous price in chain, indicator
       outputSize: 1,
-      hiddenLayers: [10, 4, 2],
+      hiddenLayers: [10, 10, 4, 2],
       activation: "tanh",
-      learningRate: 0.00025,
+      learningRate: 0.001,
+      momentum: 0.4,
     });
     this.account = account;
     this.scale = 1.0;
@@ -38,33 +40,50 @@ export default class Tracy {
     return this.net.train(sets.sets, {
       log: true,
       logPeriod: 10,
-      errorThresh: 0.175,
+      errorThresh: 0.225,
     });
   }
 
-  public test(arr: { endPrice: number; maxPrice: number; minPrice: number; volume: number }[]) {
+  public test(arr: { endPrice: number; maxPrice: number; minPrice: number; volume: number }[], log: boolean = true) {
     const oldAmount = this.account.amount;
     const sets = this.valuesToSets(arr, this.scale);
-    /*for (let i = 0; i < sets.sets.length; i++) {
-      const price = arr[i + Tracy.inputLen - 1].endPrice;
-      this.actOnPrediction(sets.sets[i].output[0], price);
-    }
-    this.account.closeBuys(arr[arr.length - 1].endPrice);
-    this.account.closeSells(arr[arr.length - 1].endPrice);
-    this.account.logBalance();
-    this.account.amount = 1000;
-    this.account.resetProfit();*/
-
+    const hits: { [index: string]: { hit: number; missed: number; hitInstead: number } } = {
+      "-1": { hit: 0, missed: 0, hitInstead: 0 },
+      "0": { hit: 0, missed: 0, hitInstead: 0 },
+      "1": { hit: 0, missed: 0, hitInstead: 0 },
+    };
+    let error = 0;
     for (let i = 0; i < sets.sets.length; i++) {
       const output = (this.net.run(sets.sets[i].input) as number[])[0];
+      const expectedDecision = this.makeDecision(sets.sets[i].output[0]);
+      const actualDecision = this.makeDecision(output);
+      const hit = actualDecision == expectedDecision;
+      if (log) {
+        const logF = hit ? chalk.green : chalk.red;
+        console.log(
+          `expected: ${chalk.blue(MathUtil.round(sets.sets[i].output[0], 2))} actual: ${logF(
+            MathUtil.round(output, 2)
+          )}`
+        );
+      }
+      if (hit) {
+        hits[expectedDecision].hit++;
+      } else {
+        hits[expectedDecision].missed;
+        hits[actualDecision].hitInstead++;
+      }
+      error += Math.abs(output - sets.sets[i].output[0]);
       const price = arr[i + Tracy.inputLen - 1].endPrice;
       this.actOnPrediction(output, price);
     }
+    error /= sets.sets.length;
     this.account.closeBuys(arr[arr.length - 1].endPrice);
     this.account.closeSells(arr[arr.length - 1].endPrice);
     this.account.logBalance();
     this.account.resetProfit();
     this.account.amount = oldAmount;
+    console.table(hits);
+    console.log("Average error: " + error);
   }
 
   public valuesToSets(
@@ -125,7 +144,7 @@ export default class Tracy {
 
   public actOnPrediction(prediction: number, price: number) {
     const decision = this.makeDecision(prediction);
-    const amount = Math.min(Math.abs(this.account.amount * 0.01 * prediction), Tracy.maxAmount);
+    const amount = Math.abs(prediction) * Math.min(this.account.amount * 0.01, Tracy.maxAmount);
     if (decision == 1.0) {
       this.account.closeSells(price);
       this.account.buy(price, amount);

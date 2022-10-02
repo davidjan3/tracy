@@ -13,4 +13,8 @@ export default class MathUtil {
       return diff > pv ? diff : pv;
     }, 0);
   }
+
+  public static round(val: number, n: number = 0) {
+    return Math.round(val * 10 ** n) / 10 ** n;
+  }
 }

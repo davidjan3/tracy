@@ -5,7 +5,6 @@ export default class Account {
   private loss: number;
   private gain: number;
   public openPositions: { type: 1 | -1; amount: number; openingPrice: number }[];
-  private static readonly log = true;
 
   constructor(amount: number = 1000) {
     this.amount = amount;
@@ -27,15 +26,15 @@ export default class Account {
     return this.openPositions.push({ type: type, amount: amount, openingPrice: price }) - 1;
   }
 
-  public closeBuys(price: number) {
-    this.closePositions(price, 1);
+  public closeBuys(price: number, log: boolean = true) {
+    this.closePositions(price, 1, log);
   }
 
-  public closeSells(price: number) {
-    this.closePositions(price, -1);
+  public closeSells(price: number, log: boolean = true) {
+    this.closePositions(price, -1, log);
   }
 
-  private closePosition(price: number, index: number): number {
+  private closePosition(price: number, index: number, log: boolean = true): number {
     const pos = this.openPositions[index];
     const profit = pos.amount * (price - pos.openingPrice) * pos.type;
     if (Number.isNaN(profit)) debugger;
@@ -47,7 +46,7 @@ export default class Account {
       this.loss -= profit;
       logF = chalk.red;
     }
-    if (Account.log)
+    if (log)
       console.log(
         chalk.dim(`Closed ${pos.type == 1 ? "B" : "S"} position ${index}: `) +
           `${pos.amount} x (${pos.openingPrice} -> ${price}) = ` +
@@ -58,9 +57,9 @@ export default class Account {
     return profit;
   }
 
-  private closePositions(price: number, type: 1 | -1) {
+  private closePositions(price: number, type: 1 | -1, log: boolean = true) {
     for (let i = this.openPositions.length - 1; i >= 0; i--) {
-      if (this.openPositions[i].type == type) this.closePosition(price, i);
+      if (this.openPositions[i].type == type) this.closePosition(price, i, log);
     }
   }
 
@@ -74,9 +73,9 @@ export default class Account {
     const logF = profit < 0 ? chalk.red : chalk.green;
     console.log(
       chalk.bold(
-        `Balance: ${this.amount}, Profit: ${chalk.green("+" + this.gain)} ${chalk.red("-" + this.loss)} = ${logF(
-          (profit < 0 ? "" : "+") + profit
-        )}`
+        `Balance: ${this.amount}, Profit: ${chalk.green("+" + this.gain)} ${chalk.red("-" + this.loss)} (${chalk.blue(
+          Math.round((this.gain / (this.gain + this.loss)) * 100) + "%"
+        )}) = ${logF((profit < 0 ? "" : "+") + profit)}`
       )
     );
   }
