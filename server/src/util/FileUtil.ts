@@ -12,14 +12,17 @@ export default class FileUtil {
   public static loadCSV(
     path: string,
     columns: { [colname: string]: number },
-    skipHeaders?: number,
-    log?: boolean
+    options?: {
+      skipHeaders?: number;
+      log?: boolean;
+      interval?: number;
+    }
   ): { [index: string]: number }[] {
     path = this.completePath(path);
     const data = readFileSync(path, "utf8");
     const dataSplit = data.split("\n");
     let res: { [index: string]: number }[] = [];
-    for (let i = skipHeaders ?? 0; i < dataSplit.length; i++) {
+    for (let i = options?.skipHeaders ?? 0; i < dataSplit.length; i += options?.interval ?? 1) {
       if (!dataSplit[i]) continue;
       const rowSplit = dataSplit[i].split(",");
       const vals: { [index: string]: number } = {};
@@ -29,13 +32,21 @@ export default class FileUtil {
         if (Number.isNaN(vals[col])) invalid = true;
       }
       if (invalid) continue;
-      if (log && (i % 1000 == 0 || i == dataSplit.length - 1)) console.log(`Reading CSV: ${i} / ${dataSplit.length}`);
+      if (options?.log && (i % 1000 == 0 || i == dataSplit.length - 1))
+        console.log(`Reading CSV: ${i} / ${dataSplit.length}`);
       res.push(vals);
     }
     return res;
   }
 
-  private static incrementPath(path: string, n: number) {
+  public static incrementPath(path: string, n?: number): string {
+    if (n == undefined) {
+      let n = 0;
+      while (existsSync(this.incrementPath(path, n))) {
+        n++;
+      }
+      return this.incrementPath(path, n);
+    }
     if (n == 0) return path;
     const split = path.split(".");
     return split[0] + ` (${n})` + (split.length > 1 ? "." + split[1] : "");
