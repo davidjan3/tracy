@@ -1,4 +1,6 @@
 import * as tf from "@tensorflow/tfjs-node-gpu";
+import { batchNorm } from "@tensorflow/tfjs-node-gpu";
+import { layer } from "brain.js/dist/src";
 import chalk from "chalk";
 import MathUtil from "util/MathUtil";
 import Account from "./account";
@@ -10,8 +12,8 @@ export type Sets = {
 };
 
 export default class Tracy {
-  static readonly inputLen = 8; //input length in units of time
-  static readonly minTradeLen = 2; //minimum trade length in units of time
+  static readonly inputLen = 20; //input length in units of time
+  static readonly minTradeLen = 4; //minimum trade length in units of time
   static readonly decisionThreshold = 0.25; //minimum deviation from 0 where decision is made
   static readonly maxAmount = 20.0; //Max amount / leverage to buy&sell
   public net: tf.LayersModel;
@@ -19,26 +21,42 @@ export default class Tracy {
   public inputScale: number;
 
   constructor(account: Account, model?: tf.LayersModel) {
+    tf.setBackend("cpu");
     if (model) this.net = model;
-    else
-      this.net = tf.sequential({
-        layers: [
-          tf.layers.dense({ inputShape: [Tracy.inputLen + 1], activation: "sigmoid", units: 18 }),
-          tf.layers.dense({ activation: "sigmoid", units: 10 }),
-          tf.layers.dense({ activation: "sigmoid", units: 2 }),
-        ],
-      });
-    this.net.compile({ optimizer: tf.train.sgd(0.0004), loss: "meanSquaredError" });
+    else {
+      const layers = [
+        tf.input({ shape: [Tracy.inputLen + 1] }),
+        tf.layers.dense({
+          activation: "sigmoid",
+          units: 16,
+        }),
+        tf.layers.dense({
+          activation: "sigmoid",
+          units: 10,
+        }),
+        tf.layers.dense({
+          activation: "sigmoid",
+          units: 2,
+        }),
+      ];
+      this.net = tf.model({ inputs: layers[0] as tf.SymbolicTensor, outputs: Tracy.applyCascade(layers) });
+    }
+    this.net.compile({ optimizer: tf.train.sgd(0.04), loss: tf.losses.meanSquaredError });
     this.inputScale = 1.0;
     this.account = account;
   }
 
   public async train(arr: Input[]) {
     const sets = this.valuesToSets(arr);
+    sets.sets.inputs.print();
+    sets.sets.outputs.print();
     console.log(sets);
     this.inputScale = sets.scale;
+    await tf.ready();
     return await this.net.fit(sets.sets.inputs, sets.sets.outputs, {
-      epochs: 1,
+      batchSize: 64,
+      epochs: 10,
+      shuffle: true,
     });
   }
 
@@ -55,13 +73,11 @@ export default class Tracy {
       expectedSell: { actualChill: 0, actualBuy: 0, actualSell: 0 },
     };
     let error = 0;
-    const inputs = sets.sets.inputs.arraySync();
-    const outputs = sets.sets.outputs.arraySync();
-    for (let i = 0; i < inputs.length; i++) {
-      const expectedOutput = Tracy.combOutput(outputs[i] as [number, number]);
-      const actualOutput = Tracy.combOutput(
-        (this.net.predict(tf.tensor2d([inputs[i]])) as tf.Tensor).arraySync() as [number, number]
-      );
+    const actualOutputs = (this.net.predict(sets.sets.inputs) as tf.Tensor2D).arraySync();
+    const expectedOutputs = sets.sets.outputs.arraySync();
+    for (let i = 0; i < expectedOutputs.length; i++) {
+      const expectedOutput = Tracy.combOutput(expectedOutputs[i] as [number, number]);
+      const actualOutput = Tracy.combOutput(actualOutputs[i] as [number, number]);
       const expectedDecision = this.makeDecision(expectedOutput, 0.001);
       const actualDecision = this.makeDecision(actualOutput);
       const hit = actualDecision == expectedDecision;
@@ -76,7 +92,7 @@ export default class Tracy {
       const price = arr[i + Tracy.inputLen - 1].endPrice;
       this.actOnPrediction(actualOutput, price, options.logFinance);
     }
-    error /= inputs.length;
+    error /= expectedOutputs.length;
     this.account.closeBuys(arr[arr.length - 1].endPrice, options.logFinance);
     this.account.closeSells(arr[arr.length - 1].endPrice, options.logFinance);
     this.account.logBalance();
@@ -101,7 +117,7 @@ export default class Tracy {
       const priceDiff = (arr[i + 1].endPrice - arr[i].endPrice) / arr[i].endPrice;
       diffArr[i] = priceDiff;
     }
-    scale ??= 1.0 / MathUtil.getStandardDeviation(diffArr, 0.0);
+    scale ??= 1.0 / MathUtil.getStandardDeviation(diffArr);
     diffArr = diffArr.map((v) => v * scale!);
 
     let inputs: number[][] = [];
@@ -209,5 +225,12 @@ export default class Tracy {
 
   public static combOutput(output: [number, number]) {
     return output[0] - output[1];
+  }
+
+  private static applyCascade(layers: (tf.layers.Layer | tf.SymbolicTensor)[]): tf.SymbolicTensor {
+    if (layers.length == 1) return layers[0] as tf.SymbolicTensor;
+    return (layers[layers.length - 1] as tf.layers.Layer).apply(
+      this.applyCascade(layers.slice(0, layers.length - 1))
+    ) as tf.SymbolicTensor;
   }
 }

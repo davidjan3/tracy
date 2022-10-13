@@ -2,29 +2,30 @@ import RandomUtil from "util/RandomUtil";
 import * as tf from "@tensorflow/tfjs-node-gpu";
 
 async function test() {
-  await tf.setBackend("cpu");
-  const inSize = 20;
-  const amount = 100;
-  const net = tf.sequential({
-    layers: [
-      tf.layers.dense({ inputShape: [inSize], activation: "sigmoid", units: 40 }),
-      tf.layers.dense({ activation: "sigmoid", units: 40 }),
-      tf.layers.dense({ activation: "sigmoid", units: 40 }),
-      tf.layers.dense({ activation: "sigmoid", units: 1 }),
-    ],
-  });
+  await tf.setBackend("tensorflow");
+  const inSize = 400;
+  const amount = 1000;
+  const il = tf.input({ shape: [inSize] });
+  const hl0 = tf.layers.dense({ activation: "sigmoid", units: 80 });
+  const hl1 = tf.layers.dense({ activation: "sigmoid", units: 80 });
+  const hl2 = tf.layers.dense({ activation: "sigmoid", units: 80 });
+  const hl3 = tf.layers.dense({ activation: "sigmoid", units: 1 });
+  const ol = hl3.apply(hl2.apply(hl1.apply(hl0.apply(il)))) as tf.SymbolicTensor;
+  const net = tf.model({ inputs: il, outputs: ol });
   net.compile({ optimizer: "sgd", loss: "meanSquaredError" });
 
   const xsArr = [];
   const ysArr = [];
 
   for (let i = 0; i < amount; i++) {
-    xsArr.push(new Array(inSize).fill(i));
-    ysArr.push([(Math.sin(i) + 1) / 2]);
+    xsArr.push(new Array(inSize).fill(i / 10));
+    ysArr.push([(Math.sin(i / 10) + 1) / 2]);
   }
 
-  const xs = tf.tensor(xsArr);
-  const ys = tf.tensor(ysArr);
+  const xs = tf.tensor2d(xsArr);
+  const ys = tf.tensor2d(ysArr);
+  xs.print();
+  ys.print();
   console.time("timer");
   await net.fit(xs, ys, { batchSize: 1, epochs: 200 });
   const output = net.predict(tf.tensor2d([new Array(inSize).fill(Math.PI)])) as tf.Tensor;

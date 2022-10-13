@@ -34,7 +34,7 @@ FileUtil.saveJSON("data/minutely_btc.json", history);*/
   }[];
   console.log("History parsed");
   history.splice(0, history.length * 0.5);
-  history.splice(history.length * 0.6, history.length);
+  history.splice(history.length * 0.51, history.length);
   const trainTestDistribution = 0.7; //0.6 => Use 60% for training, 40% for testing
   const trainSize = history.length * trainTestDistribution;
   const trainSets = history.slice(0, trainSize);
