@@ -4,6 +4,7 @@ import { layer } from "brain.js/dist/src";
 import chalk from "chalk";
 import MathUtil from "util/MathUtil";
 import Account from "./account";
+import { ChartData } from "./indicators";
 
 export type Input = { endPrice: number; maxPrice: number; minPrice: number; volume: number };
 export type Sets = {
@@ -204,19 +205,6 @@ export default class Tracy {
     if (n >= limit) return 1.0;
     const p = n / limit;
     return Math.pow(n, 1 / 10);
-  }
-
-  public static groupInterval(values: Input[], interval: number) {
-    let newValues: Input[] = [];
-    for (let i = 0; i < values.length - interval; i += interval) {
-      const range = values.slice(i, i + interval);
-      const endPrice = range[interval - 1].endPrice;
-      const volume = range.map((v) => v.volume).reduce((a, b) => a + b, 0);
-      const minPrice = Math.min(...range.map((v) => v.minPrice));
-      const maxPrice = Math.max(...range.map((v) => v.maxPrice));
-      newValues.push({ endPrice: endPrice, minPrice: minPrice, maxPrice: maxPrice, volume: volume });
-    }
-    return newValues;
   }
 
   public static splitOutput(output: number) {

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8" />
+  <link rel="stylesheet" href="main.css">
+  <script src="../node_modules/echarts/dist/echarts.js"></script>
+</head>
+
+<body>
+  <div id="chart"></div>
+  <script type="text/javascript">
+    const chart = echarts.init(document.getElementById("chart"));
+    const chartData = getJSON("data/15min_btc.json");
+    console.log(chartData.map(d => d.ts * 1000));
+
+    window.onresize = () => {
+      chart?.resize();
+    };
+
+    var option = {
+      grid: {
+      },
+      xAxis: {
+        type: 'time',
+        boundaryGap: false,
+        axisLine: { onZero: false },
+        splitLine: { show: false },
+        min: "dataMin",
+        max: "dataMax"
+      },
+      yAxis: {
+        scale: true,
+        splitArea: {
+          show: true
+        }
+      },
+      dataZoom: [
+        {
+          type: 'inside',
+          start: 50,
+          end: 100
+        },
+        {
+          show: true,
+          type: 'slider',
+          top: '90%',
+          start: 50,
+          end: 100
+        }
+      ],
+      series: [
+        {
+          name: 'BTC',
+          type: 'candlestick',
+          data: chartData.map(d => [d.ts * 1000, d.openPrice, d.closePrice, d.minPrice, d.maxPrice]),
+          itemStyle: {
+            color: "green",
+            color0: "red",
+            borderColor: "green",
+            borderColor0: "red"
+          },
+        },
+        /*{
+          name: 'MA5',
+          type: 'line',
+          data: calculateMA(5),
+          smooth: true,
+          lineStyle: {
+            opacity: 0.5
+          }
+        },
+        {
+          name: 'MA10',
+          type: 'line',
+          data: calculateMA(10),
+          smooth: true,
+          lineStyle: {
+            opacity: 0.5
+          }
+        },*/
+      ]
+    };
+
+    chart.setOption(option);
+
+    function getJSON(path) {
+      var request = new XMLHttpRequest();
+      request.open("GET", "../server/src/" + path, false);
+      request.send(null);
+      return JSON.parse(request.responseText);
+    }
+  </script>
+</body>
+
+</html>

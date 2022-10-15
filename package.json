@@ -23,7 +23,9 @@
     "brain.js": "^2.0.0-beta.16",
     "chalk": "^4.1.2",
     "cross-env": "^7.0.2",
-    "gpu.js": "^2.15.2"
+    "echarts": "^5.4.0",
+    "gpu.js": "^2.15.2",
+    "technicalindicators": "^3.1.0"
   },
   "devDependencies": {
     "@types/node": "^14.14.2",
