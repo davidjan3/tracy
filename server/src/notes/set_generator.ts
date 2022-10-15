@@ -8,8 +8,9 @@ let history = FileUtil.loadCSV(
   { skipHeaders: 2 }
 ) as ChartData[];
 history.splice(0, history.length * 0.1);
-history = Indicators.groupInterval(history, 15);
-FileUtil.saveJSON("data/15min_btc.json", history);
+history.forEach((v) => (v.ts *= 1000));
+history = Indicators.groupInterval(history, 360);
+FileUtil.saveJSON("data/360min_btc.json", history, false);
 
 let ids: IndicatorData[] = [
   Indicators.meta(history, "closePrice"),
@@ -19,4 +20,4 @@ let ids: IndicatorData[] = [
 ];
 
 ids = Indicators.cutDelays(ids);
-FileUtil.saveJSON("data/15min_btc_indicators.json", ids);
+FileUtil.saveJSON("data/360min_btc_indicators.json", ids, false);

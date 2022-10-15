@@ -11,15 +11,15 @@
   <div id="chart"></div>
   <script type="text/javascript">
     const chart = echarts.init(document.getElementById("chart"));
-    const chartData = getJSON("data/15min_btc.json");
-    console.log(chartData.map(d => d.ts * 1000));
-
-    window.onresize = () => {
-      chart?.resize();
-    };
+    const chartData = getJSON("data/360min_btc.json");
+    const indicatorData = getJSON("data/360min_btc_indicators.json").filter(id => id.type != "meta");
 
     var option = {
-      grid: {
+      animation: false,
+      legend: {
+        orient: 'vertical',
+        right: 10,
+        top: 'center'
       },
       xAxis: {
         type: 'time',
@@ -31,9 +31,6 @@
       },
       yAxis: {
         scale: true,
-        splitArea: {
-          show: true
-        }
       },
       dataZoom: [
         {
@@ -44,45 +41,41 @@
         {
           show: true,
           type: 'slider',
-          top: '90%',
-          start: 50,
-          end: 100
         }
       ],
       series: [
         {
           name: 'BTC',
           type: 'candlestick',
-          data: chartData.map(d => [d.ts * 1000, d.openPrice, d.closePrice, d.minPrice, d.maxPrice]),
+          data: chartData.map(d => [d.ts, d.openPrice, d.closePrice, d.minPrice, d.maxPrice]),
           itemStyle: {
             color: "green",
             color0: "red",
             borderColor: "green",
             borderColor0: "red"
           },
-        },
-        /*{
-          name: 'MA5',
-          type: 'line',
-          data: calculateMA(5),
-          smooth: true,
           lineStyle: {
-            opacity: 0.5
+            opacity: 1.0,
           }
         },
-        {
-          name: 'MA10',
-          type: 'line',
-          data: calculateMA(10),
-          smooth: true,
-          lineStyle: {
-            opacity: 0.5
+        ...indicatorData.map(id => (
+          {
+            name: id.config,
+            type: "line",
+            data: id.data,
+            smooth: true,
+            lineStyle: { opacity: 0.5 }
           }
-        },*/
+        )
+        )
       ]
     };
 
     chart.setOption(option);
+
+    window.onresize = () => {
+      chart?.resize();
+    };
 
     function getJSON(path) {
       var request = new XMLHttpRequest();

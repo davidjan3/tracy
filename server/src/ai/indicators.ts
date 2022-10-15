@@ -9,30 +9,55 @@ export type ChartData = {
   maxPrice: number;
   volume: number;
 };
-export type IndicatorData = { type: string; config: string; data: number[]; startTs: number; delay: number };
+export type IndicatorData = {
+  type: string;
+  config: string;
+  data: number[][];
+  delay: number;
+};
 
 export default class Indicators {
   public static meta(data: ChartData[], key: keyof ChartData): IndicatorData {
-    return { type: "meta", config: key, data: data.map((d) => d[key]), startTs: data[0].ts, delay: 0 };
+    return {
+      type: "meta",
+      config: key,
+      data: data.map((d) => [d.ts, d[key]]),
+      delay: 0,
+    };
   }
 
   public static diff(id: IndicatorData): IndicatorData {
-    let res = id.data.map((v, i) => (i == 0 ? 0 : id.data[i] - id.data[i - 1]));
-    return { type: "diff", config: id.config + "Diff", data: res, startTs: id.startTs, delay: id.delay + 1 };
+    let res = id.data.map((v, i) => [id.data[i][0], i == 0 ? 0 : id.data[i][1] - id.data[i - 1][1]]);
+    return {
+      type: "diff",
+      config: id.config + "Diff",
+      data: res,
+      delay: id.delay + 1,
+    };
   }
 
   public static sma(data: ChartData[], period: number): IndicatorData {
     let res: number[] = ti.sma({ values: data.map((d) => d.closePrice), period: period }) ?? [];
     const delay = data.length - res.length;
     res = this.padArray(res, data.length);
-    return { type: "sma", config: "sma" + period, data: res, startTs: data[0].ts, delay: delay };
+    return {
+      type: "sma",
+      config: "sma" + period,
+      data: res.map((v, i) => [data[i].ts, v]),
+      delay: delay,
+    };
   }
 
   public static ema(data: ChartData[], period: number): IndicatorData {
     let res: number[] = ti.ema({ values: data.map((d) => d.closePrice), period: period }) ?? [];
     const delay = data.length - res.length;
     res = this.padArray(res, data.length);
-    return { type: "ema", config: "ema" + period, data: res, startTs: data[0].ts, delay: delay };
+    return {
+      type: "ema",
+      config: "ema" + period,
+      data: res.map((v, i) => [data[i].ts, v]),
+      delay: delay,
+    };
   }
 
   public static tema(data: ChartData[], period: number): IndicatorData {
@@ -48,7 +73,12 @@ export default class Indicators {
     }
     const delay = data.length - res.length;
     res = this.padArray(res, data.length);
-    return { type: "tema", config: "tema" + period, data: res, startTs: data[0].ts, delay: delay };
+    return {
+      type: "tema",
+      config: "tema" + period,
+      data: res.map((v, i) => [data[i].ts, v]),
+      delay: delay,
+    };
   }
 
   public static davg(data: ChartData[]): IndicatorData {
@@ -56,7 +86,12 @@ export default class Indicators {
       const priceRange = v.maxPrice - v.minPrice;
       return priceRange != 0 ? ((v.closePrice - v.minPrice) / priceRange) * 2 - 1.0 : 0.0;
     });
-    return { type: "davg", config: "davg", data: res, startTs: data[0].ts, delay: 0 };
+    return {
+      type: "davg",
+      config: "davg",
+      data: res.map((v, i) => [data[i].ts, v]),
+      delay: 0,
+    };
   }
 
   public static padArray(arr: number[], length: number, where: "left" | "right" = "left"): number[] {
@@ -73,7 +108,6 @@ export default class Indicators {
       type: id.type,
       config: id.config,
       delay: 0,
-      startTs: id.startTs + maxDelay,
       data: id.data.slice(maxDelay),
     }));
     return res;
