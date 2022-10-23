@@ -9,6 +9,7 @@ export type ChartData = {
   maxPrice: number;
   volume: number;
 };
+
 export type IndicatorData = {
   type: string;
   config: string;
@@ -16,6 +17,7 @@ export type IndicatorData = {
   delay: number;
 };
 
+ti.setConfig("precision", 10);
 export default class Indicators {
   public static meta(data: ChartData[], key: keyof ChartData): IndicatorData {
     return {
@@ -60,6 +62,38 @@ export default class Indicators {
     };
   }
 
+  public static bb(
+    data: ChartData[],
+    period: number,
+    stdDev?: number
+  ): { lower: IndicatorData; middle: IndicatorData; upper: IndicatorData } {
+    const prices = data.map((d) => d.closePrice);
+    if (!stdDev) stdDev = MathUtil.getStandardDeviation(prices);
+    let res = ti.bollingerbands({ values: prices, period: period, stdDev: stdDev }) ?? [];
+    const delay = data.length - res.length;
+    res = this.padArray(res, data.length);
+    return {
+      lower: {
+        type: "bbLower",
+        config: "bbLower" + period,
+        data: res.map((v, i) => [data[i].ts, v.lower]),
+        delay: delay,
+      },
+      middle: {
+        type: "bbMiddle",
+        config: "bbMiddle" + period,
+        data: res.map((v, i) => [data[i].ts, v.middle]),
+        delay: delay,
+      },
+      upper: {
+        type: "bbHigh",
+        config: "bbHigh" + period,
+        data: res.map((v, i) => [data[i].ts, v.upper]),
+        delay: delay,
+      },
+    };
+  }
+
   public static tema(data: ChartData[], period: number): IndicatorData {
     let ema1 = ti.ema({ values: data.map((d) => d.closePrice), period: period });
     let ema2 = ti.ema({ values: ema1, period: period });
@@ -94,7 +128,29 @@ export default class Indicators {
     };
   }
 
-  public static padArray(arr: number[], length: number, where: "left" | "right" = "left"): number[] {
+  public static cpr(data: ChartData[], period: number = 10): IndicatorData {
+    let res = data.map((v, i) => {
+      if (i < data.length - 1) return [v.ts, 0];
+      const range = data.slice(Math.max(0, i - (period - 1)), i + 1);
+      const rangeFormatted = {
+        open: range.map((v) => v.openPrice),
+        close: range.map((v) => v.closePrice),
+        high: range.map((v) => v.maxPrice),
+        low: range.map((v) => v.minPrice),
+      };
+      const bullish = ti.bullish(rangeFormatted) ? 1.0 : 0.0;
+      const bearish = ti.bearish(rangeFormatted) ? 1.0 : 0.0;
+      return [v.ts, bullish - bearish];
+    });
+    return {
+      type: "cpr",
+      config: "cpr",
+      data: res,
+      delay: 0,
+    };
+  }
+
+  public static padArray<T>(arr: T[], length: number, where: "left" | "right" = "left"): T[] {
     const addLen = length - arr.length;
     if (addLen == 0) return arr;
     if (addLen < 0) return where == "left" ? arr.slice(-addLen) : arr.slice(0, arr.length + addLen);

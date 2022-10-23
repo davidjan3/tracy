@@ -26,38 +26,40 @@ export default class Account {
     return this.openPositions.push({ type: type, amount: amount, openingPrice: price }) - 1;
   }
 
-  public closeBuys(price: number, log: boolean = true) {
+  public closeBuys(price: number, log?: string) {
     this.closePositions(price, 1, log);
   }
 
-  public closeSells(price: number, log: boolean = true) {
+  public closeSells(price: number, log?: string) {
     this.closePositions(price, -1, log);
   }
 
-  private closePosition(price: number, index: number, log: boolean = true): number {
+  private closePosition(price: number, index: number, log?: string): number {
     const pos = this.openPositions[index];
     const profit = pos.amount * (price - pos.openingPrice) * pos.type;
     if (Number.isNaN(profit)) debugger;
-    let logF;
-    if (profit >= 0) {
-      this.gain += profit;
-      logF = chalk.green;
-    } else {
-      this.loss -= profit;
-      logF = chalk.red;
-    }
-    if (log)
+    if (log) {
+      let logF;
+      if (profit >= 0) {
+        this.gain += profit;
+        logF = chalk.green;
+      } else {
+        this.loss -= profit;
+        logF = chalk.red;
+      }
       console.log(
-        chalk.dim(`Closed ${pos.type == 1 ? "B" : "S"} position ${index}: `) +
+        `${log}: ` +
+          chalk.dim(`Closed ${pos.type == 1 ? "B" : "S"} position ${index}: `) +
           `${pos.amount} x (${pos.openingPrice} -> ${price}) = ` +
           logF(`${(profit < 0 ? "" : "+") + profit}`)
       );
+    }
     this.amount += profit + pos.amount;
     this.openPositions.splice(index, 1);
     return profit;
   }
 
-  private closePositions(price: number, type: 1 | -1, log: boolean = true) {
+  private closePositions(price: number, type: 1 | -1, log?: string) {
     for (let i = this.openPositions.length - 1; i >= 0; i--) {
       if (this.openPositions[i].type == type) this.closePosition(price, i, log);
     }

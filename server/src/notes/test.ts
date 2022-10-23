@@ -1,7 +1,8 @@
 import RandomUtil from "util/RandomUtil";
 import * as tf from "@tensorflow/tfjs-node-gpu";
+import MathUtil from "util/MathUtil";
 
-async function test() {
+/*async function test() {
   await tf.setBackend("tensorflow");
   const inSize = 400;
   const amount = 1000;
@@ -31,6 +32,10 @@ async function test() {
   const output = net.predict(tf.tensor2d([new Array(inSize).fill(Math.PI)])) as tf.Tensor;
   console.log("output", await output.data());
   console.timeEnd("timer");
+}*/
+
+async function test() {
+  console.log(MathUtil.normalize([2, 4, 6, 8]));
 }
 
 test();
