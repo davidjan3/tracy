@@ -1,7 +1,7 @@
 import Indicators, { ChartData } from "./indicators";
 import Account from "./account";
 import Tracy from "./tracy";
-import { crossDown, crossUp } from "technicalindicators";
+import MathUtil from "util/MathUtil";
 
 export interface Strategy {
   name: string;
@@ -19,17 +19,41 @@ export default class Runner {
     }[]
   ) {}
 
-  public simulateChart(data: ChartData[], options: { logFinance?: boolean } = { logFinance: true }) {
+  public simulateChart(
+    data: ChartData[],
+    options: { logFinance?: boolean; logTechnical?: boolean; outputMinMax?: [number, number] } = {
+      logFinance: true,
+      logTechnical: false,
+      outputMinMax: [-1, 1],
+    }
+  ) {
     for (const strat of this.strats) {
       strat.logMatrix = Runner.createLogMatrix();
     }
 
     const runPeriod = 100;
+    const logInt = 1000;
+    let logTimer = Date.now();
+    let runs = 0;
     for (let i = runPeriod; i < data.length - Tracy.minTradeLen; i++) {
+      if (Date.now() - logTimer > logInt) {
+        const time = Date.now() - logTimer;
+        console.log(
+          `Simulating chart: ${i - runPeriod}/${data.length - Tracy.minTradeLen - runPeriod} (${MathUtil.round(
+            time / runs,
+            2
+          )}ms/run)`
+        );
+        runs = 0;
+        logTimer = Date.now();
+      }
       this.run(data.slice(Math.max(i - runPeriod + 1, 0), i + 1), {
         logFinance: options?.logFinance,
+        logTechnical: options?.logTechnical,
         nextData: data.slice(i + 1, i + 1 + Tracy.minTradeLen),
+        outputMinMax: options.outputMinMax,
       });
+      runs++;
     }
 
     for (const strat of this.strats) {
@@ -47,21 +71,29 @@ export default class Runner {
     }
   }
 
-  public run(data: ChartData[], options?: { nextData?: ChartData[]; logFinance?: boolean }) {
+  public run(
+    data: ChartData[],
+    options?: { nextData?: ChartData[]; logFinance?: boolean; logTechnical?: boolean; outputMinMax?: [number, number] }
+  ) {
     const period = 100;
     const range = data.length > period ? data.slice(-period) : data;
-    const expectedDecision = Tracy.makeDecision(
-      options?.nextData ? Tracy.makePrediction(data[data.length - 1], options.nextData) : 0.0
-    );
+    let expectedOutput = options?.nextData ? Tracy.makePrediction(data[data.length - 1], options.nextData) : undefined;
+    if (expectedOutput && options?.outputMinMax)
+      expectedOutput = MathUtil.saturation(
+        MathUtil.normalizeSplit([expectedOutput], 0, [-1, 1], options.outputMinMax)[0]
+      );
+    const expectedDecision = expectedOutput ? Tracy.makeDecision(expectedOutput) : undefined;
     for (const strat of this.strats) {
-      const output = strat.strat.run(range);
-      const actualDecision = Tracy.makeDecision(output);
-      if (strat.logMatrix && options?.nextData) Runner.logInMatrix(strat.logMatrix, expectedDecision, actualDecision);
+      const actualOutput = strat.strat.run(range);
+      const actualDecision = Tracy.makeDecision(actualOutput);
+      if (options?.logTechnical && expectedOutput) console.log(`Actual: ${actualOutput} Expected: ${expectedOutput}`);
+      if (strat.logMatrix && expectedDecision) Runner.logInMatrix(strat.logMatrix, expectedDecision, actualDecision);
       const price = data[data.length - 1].closePrice;
       if (strat.account.amount <= 0) {
         strat.account.closeBuys(price, options?.logFinance ? strat.strat.name : undefined);
         strat.account.closeSells(price, options?.logFinance ? strat.strat.name : undefined);
-      } else Runner.actOnPrediction(strat.account, output, price, options?.logFinance ? strat.strat.name : undefined);
+      } else
+        Runner.actOnPrediction(strat.account, actualOutput, price, options?.logFinance ? strat.strat.name : undefined);
     }
   }
 

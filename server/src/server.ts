@@ -1,4 +1,3 @@
-import { CPR, MA } from "./ai/runner";
 import Account from "ai/account";
 import Tracy from "ai/tracy";
 import FileUtil from "util/FileUtil";
@@ -51,7 +50,7 @@ for (let i = 0; i < testSets.length / step; i++) {
   tracy.test(testSet);
 }*/
   console.log("Testing done");
-  console.log("inputScale", net.minMax);
+  console.log("inputScale", net.inputMinMax);
 }
 
 async function test() {
@@ -64,20 +63,21 @@ async function test() {
     minPrice: number;
     volume: number;
   }[];
-  history.splice(0, history.length * 0.2);
-  const trainData = history.splice(0, history.length * 0.005);
+  history.splice(0, history.length * 0.5);
+  const trainData = history.splice(Math.floor(history.length * 0.5), history.length);
   console.log("History parsed");
 
   const tracy = new Tracy();
-  tracy.train(trainData);
+  await tracy.train(trainData);
 
   const strats = [
     { strat: tracy, account: new Account(1000) },
-    { strat: new MA(), account: new Account(1000) },
+    //{ strat: new MA(), account: new Account(1000) },
   ];
-
-  const r = new Runner(strats);
-  r.simulateChart(history);
+  const rTrain = new Runner(strats);
+  rTrain.simulateChart(trainData, { logTechnical: true, outputMinMax: tracy.outputMinMax });
+  const rTest = new Runner(strats);
+  rTest.simulateChart(history, { logTechnical: true, outputMinMax: tracy.outputMinMax });
 }
 
 test();

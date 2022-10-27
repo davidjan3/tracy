@@ -1,24 +1,25 @@
 import * as tf from "@tensorflow/tfjs-node-gpu";
 import MathUtil from "util/MathUtil";
-import Account from "./account";
 import Indicators, { ChartData } from "./indicators";
 import { Strategy } from "./runner";
 
 export type Input = { endPrice: number; maxPrice: number; minPrice: number; volume: number };
 export type Sets = {
-  inputs: tf.Tensor3D;
+  inputs: tf.Tensor2D;
   outputs: tf.Tensor1D;
 };
 
 export default class Tracy implements Strategy {
   public name = "Tracy";
-  static readonly inputLen = 5; //input length in units of time
-  static readonly inputShape = [8, Tracy.inputLen]; //8 indicators
+  static readonly inputLen = 4; //input length in units of time
+  static readonly indicatorCount = 8; //number of indicators used
+  static readonly inputShape = [this.indicatorCount * Tracy.inputLen]; //8 indicators
   static readonly minTradeLen = 1; //minimum trade length in units of time
-  static readonly decisionThreshold = 0.25; //minimum deviation from 0 where decision is made
+  static readonly decisionThreshold = 0.4; //minimum deviation from 0 where decision is made
   static readonly maxAmount = 20.0; //Max amount / leverage to buy&sell
   public net: tf.LayersModel;
-  public minMax: [number, number][] | undefined;
+  public inputMinMax: [number, number][] | undefined;
+  public outputMinMax: [number, number] | undefined;
 
   constructor(model?: tf.LayersModel) {
     tf.setBackend("cpu");
@@ -26,51 +27,54 @@ export default class Tracy implements Strategy {
     else {
       const layers = [
         tf.input({ shape: Tracy.inputShape }),
-        tf.layers.flatten(),
         tf.layers.dense({
-          activation: "sigmoid",
-          units: 16,
+          activation: "tanh",
+          units: 32,
         }),
         tf.layers.dense({
-          activation: "sigmoid",
-          units: 10,
+          activation: "tanh",
+          units: 16,
         }),
         tf.layers.dense({
           activation: "tanh",
           units: 1,
-          useBias: true,
         }),
       ];
       this.net = tf.model({ inputs: layers[0] as tf.SymbolicTensor, outputs: Tracy.applyCascade(layers) });
     }
-    this.net.compile({ optimizer: tf.train.sgd(0.04), loss: tf.losses.meanSquaredError });
+    this.net.compile({ optimizer: tf.train.sgd(0.00001), loss: tf.losses.meanSquaredError });
   }
 
   public async train(arr: ChartData[]) {
     const sets = Tracy.valuesToSets(arr);
-    this.minMax = sets.minMax;
+    this.inputMinMax = sets.inputMinMax;
+    this.outputMinMax = sets.outputMinMax;
     await tf.ready();
     return await this.net.fit(sets.sets.inputs, sets.sets.outputs, {
-      batchSize: 64,
-      epochs: 10,
+      batchSize: 1,
+      epochs: 20,
       shuffle: true,
     });
   }
 
   public static valuesToSets(
     arr: ChartData[],
-    minMax?: [number, number][],
+    inputMinMax?: [number, number][],
+    outputMinMax?: [number, number],
     withoutOutputs: boolean = false
   ): {
     sets: Sets;
-    minMax?: [number, number][];
+    inputMinMax: [number, number][];
+    outputMinMax: [number, number];
   } {
     if (arr.length < Tracy.inputLen + Tracy.minTradeLen)
       return {
-        sets: { inputs: tf.tensor3d([], [Tracy.inputShape[0], Tracy.inputShape[1], 0]), outputs: tf.tensor1d([]) },
+        sets: { inputs: tf.tensor2d([]), outputs: tf.tensor1d([]) },
+        inputMinMax: Array(Tracy.indicatorCount).fill([-1, 1]),
+        outputMinMax: [-1, 1],
       };
 
-    let inputs: number[][][] = [];
+    let inputs: number[][] = [];
     let outputs: number[] = [];
     const closePrice = Indicators.meta(arr, "closePrice");
     const volume = Indicators.meta(arr, "volume");
@@ -78,19 +82,19 @@ export default class Tracy implements Strategy {
     const ema20 = Indicators.ema(arr, 20);
     const tema20 = Indicators.tema(arr, 20);
     const bb = Indicators.bb(arr, 20);
-    const indicators = [closePrice, volume, sma20, ema20, tema20, bb.lower, bb.middle, bb.upper];
+    const indicators = [closePrice, volume, sma20, ema20, tema20, bb.lower, bb.middle, bb.upper]; //Array(6).fill(Indicators.random(arr)) as IndicatorData[];
     const indicatorDiffs = indicators.map((id) => Indicators.diff(id));
-    minMax ??= [...[...indicators, ...indicatorDiffs].map((id) => MathUtil.getMinMax(id.data.map((v) => v[1])))];
+    inputMinMax ??= [...[...indicators, ...indicatorDiffs].map((id) => MathUtil.getMinMax(id.data.map((v) => v[1])))];
     const maxDelay = Math.max(...[...indicators, ...indicatorDiffs].map((id) => id.delay));
     for (let i = maxDelay + Tracy.inputLen; i <= arr.length - (withoutOutputs ? 0 : Tracy.minTradeLen); i++) {
-      let input: number[][] = [];
+      let input: number[] = [];
       for (let id = 0; id < indicators.length; id++) {
         const lastValue = indicators[id].data[i - 1][1];
         const prevDiffs = indicatorDiffs[id].data.slice(i - Tracy.inputLen + 1, i).map((v) => v[1]);
-        input.push([
-          ...MathUtil.normalize(prevDiffs, [0, 1], minMax[id + indicators.length]),
-          MathUtil.normalize([lastValue], [0, 1], minMax[id])[0],
-        ]);
+        input.push(
+          ...MathUtil.normalizeSplit(prevDiffs, 0, [-1, 1], inputMinMax[id + indicators.length]),
+          MathUtil.normalize([lastValue], [0, 1], inputMinMax[id])[0]
+        );
       }
       inputs.push(input);
 
@@ -99,22 +103,27 @@ export default class Tracy implements Strategy {
       outputs.push(output);
     }
     if (!withoutOutputs) {
-      let outputScale = 1.0 / MathUtil.getMaxDeviation(outputs);
-      outputs = outputs.map((o) => Math.sign(o) * MathUtil.saturation(Math.abs(o * outputScale), 1.0));
+      outputMinMax ??= MathUtil.getMinMax(outputs);
+      outputs = MathUtil.normalizeSplit(outputs, 0, [-1, 1], outputMinMax).map((v) => MathUtil.saturation(v));
     }
-    return { minMax: minMax, sets: { inputs: tf.tensor3d(inputs), outputs: tf.tensor1d(outputs) } };
+    return {
+      inputMinMax: inputMinMax,
+      outputMinMax: outputMinMax ?? [-1, 1],
+      sets: { inputs: tf.tensor2d(inputs), outputs: tf.tensor1d(outputs) },
+    };
   }
 
   public run(data: ChartData[]): number {
-    const input = Tracy.valuesToSets(data, this.minMax, true).sets.inputs;
+    const inputs = Tracy.valuesToSets(data, this.inputMinMax, this.outputMinMax, true).sets.inputs;
+    const input = inputs.slice(inputs.shape[0] - 1);
     const output = this.net.predict(input) as tf.Tensor2D;
     return output.arraySync().slice(-1)[0][0];
   }
 
-  public averageDiffNext(lastValue: number[], nextValues: number[][]): number {
+  public averageDiffNext(lastValue: ChartData, nextValues: ChartData[]): number {
     let diffSum = 0;
     for (let v of nextValues) {
-      diffSum += (v[0] - lastValue[0]) / lastValue[0];
+      diffSum += (v.closePrice - lastValue.closePrice) / lastValue.closePrice;
     }
     return diffSum / nextValues.length > 0 ? 1.0 : -1.0;
   }
@@ -131,7 +140,7 @@ export default class Tracy implements Strategy {
     for (let v of nextValues) {
       const priceDiff = (v.closePrice - lastValue.closePrice) / lastValue.closePrice;
       if (priceDiff > 0) {
-        buy += 1 / nextValues.length;
+        buy += priceDiff / nextValues.length;
       } else {
         buy = 0.0;
         break;
@@ -140,7 +149,7 @@ export default class Tracy implements Strategy {
     for (let v of nextValues) {
       const priceDiff = (v.closePrice - lastValue.closePrice) / lastValue.closePrice;
       if (priceDiff < 0) {
-        sell -= -1 / nextValues.length;
+        sell -= priceDiff / nextValues.length;
       } else {
         sell = 0.0;
         break;

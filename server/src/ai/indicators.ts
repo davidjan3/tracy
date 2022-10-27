@@ -19,6 +19,15 @@ export type IndicatorData = {
 
 ti.setConfig("precision", 10);
 export default class Indicators {
+  public static random(data: ChartData[]): IndicatorData {
+    return {
+      type: "random",
+      config: "random",
+      data: data.map((d) => [d.ts, Math.random() * 1000]),
+      delay: 0,
+    };
+  }
+
   public static meta(data: ChartData[], key: keyof ChartData): IndicatorData {
     return {
       type: "meta",

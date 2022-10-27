@@ -35,7 +35,7 @@ import MathUtil from "util/MathUtil";
 }*/
 
 async function test() {
-  console.log(MathUtil.normalize([2, 4, 6, 8]));
+  console.log(MathUtil.normalizeSplit([-2, -1, 0, 1, 2, 3], 0.0, [-1, 1])); //-1, -0.5, 0, 0.33, 0.66, 1
 }
 
 test();
