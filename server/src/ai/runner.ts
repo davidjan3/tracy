@@ -78,15 +78,16 @@ export default class Runner {
     const period = 100;
     const range = data.length > period ? data.slice(-period) : data;
     let expectedOutput = options?.nextData ? Tracy.makePrediction(data[data.length - 1], options.nextData) : undefined;
-    if (expectedOutput && options?.outputMinMax)
+    if (options?.nextData && options?.outputMinMax)
       expectedOutput = MathUtil.saturation(
-        MathUtil.normalizeSplit([expectedOutput], 0, [-1, 1], options.outputMinMax)[0]
+        MathUtil.normalizeSplit([expectedOutput!], 0, [-1, 1], options.outputMinMax)[0]
       );
-    const expectedDecision = expectedOutput ? Tracy.makeDecision(expectedOutput) : undefined;
+    const expectedDecision = options?.nextData ? Tracy.makeDecision(expectedOutput!) : undefined;
     for (const strat of this.strats) {
       const actualOutput = strat.strat.run(range);
       const actualDecision = Tracy.makeDecision(actualOutput);
-      if (options?.logTechnical && expectedOutput) console.log(`Actual: ${actualOutput} Expected: ${expectedOutput}`);
+      if (options?.logTechnical && options?.nextData)
+        console.log(`Actual: ${actualOutput} Expected: ${expectedOutput!}`);
       if (strat.logMatrix && expectedDecision) Runner.logInMatrix(strat.logMatrix, expectedDecision, actualDecision);
       const price = data[data.length - 1].closePrice;
       if (strat.account.amount <= 0) {

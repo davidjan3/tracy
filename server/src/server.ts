@@ -1,7 +1,6 @@
 import Account from "ai/account";
 import Tracy from "ai/tracy";
 import FileUtil from "util/FileUtil";
-import * as tf from "@tensorflow/tfjs-node-gpu";
 import Runner from "ai/runner";
 import { ChartData } from "ai/indicators";
 
@@ -9,9 +8,7 @@ async function main() {
   const NEW = true;
   const interval = "15min";
 
-  const net = new Tracy(
-    NEW ? undefined : await tf.loadLayersModel("file://" + FileUtil.incrementPath("data/tracyTF_" + interval))
-  );
+  const net = new Tracy(NEW ? undefined : FileUtil.incrementPath("data/tracyTF_" + interval));
   console.log("Tracy created");
   /*const history = CSVUtil.parse(
   "./server/src/data/hourly_btc.csv",
@@ -54,7 +51,7 @@ for (let i = 0; i < testSets.length / step; i++) {
 }
 
 async function test() {
-  const interval = "15min";
+  const interval = "60min";
   const history = FileUtil.loadJSON("data/" + interval + "_btc.json") as {
     ts: number;
     openPrice: number;
@@ -63,7 +60,7 @@ async function test() {
     minPrice: number;
     volume: number;
   }[];
-  history.splice(0, history.length * 0.5);
+  history.splice(0, history.length * 0.2);
   const trainData = history.splice(Math.floor(history.length * 0.5), history.length);
   console.log("History parsed");
 
@@ -75,9 +72,9 @@ async function test() {
     //{ strat: new MA(), account: new Account(1000) },
   ];
   const rTrain = new Runner(strats);
-  rTrain.simulateChart(trainData, { logTechnical: true, outputMinMax: tracy.outputMinMax });
+  rTrain.simulateChart(trainData, { logTechnical: false, outputMinMax: tracy.outputMinMax });
   const rTest = new Runner(strats);
-  rTest.simulateChart(history, { logTechnical: true, outputMinMax: tracy.outputMinMax });
+  rTest.simulateChart(history, { logTechnical: false, outputMinMax: tracy.outputMinMax });
 }
 
 test();
