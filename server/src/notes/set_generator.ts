@@ -2,7 +2,7 @@ import Indicators, { IndicatorData } from "./../ai/indicators";
 import { ChartData } from "ai/indicators";
 import FileUtil from "util/FileUtil";
 
-const interval = 1;
+const interval = 60;
 
 let history = FileUtil.loadCSV(
   "data/minutely_btc.csv",

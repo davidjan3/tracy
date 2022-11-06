@@ -30,9 +30,15 @@ export default class MathUtil {
     return arr.slice(Math.min(from, 0), Math.min(to, 0));
   }
 
-  public static getMinMax(arr: number[]): [number, number] {
-    const min = Math.min(...arr);
-    const max = Math.max(...arr);
+  public static getMinMax(arr: number[], cutOff: boolean = false): [number, number] {
+    let min, max;
+    if (cutOff) {
+      const avg = MathUtil.avg(arr);
+      const diff = MathUtil.getStandardDeviation(arr, avg) * 3;
+      arr = arr.filter((v) => v > avg - diff && v < avg + diff);
+    }
+    min = Math.min(...arr);
+    max = Math.max(...arr);
     return [min, max];
   }
 

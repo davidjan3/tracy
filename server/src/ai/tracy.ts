@@ -12,10 +12,11 @@ export type Sets = {
 export default class Tracy implements Strategy {
   public name = "Tracy";
   static readonly inputRange = 24; //input length in units of time
-  static readonly indicatorCount = 8; //number of indicators used
+  static readonly indicatorCount = 9; //number of indicators used
   static readonly inputSize = this.indicatorCount * Tracy.inputRange; //8 indicators
   static readonly outputSize = 1; //-1: sell, +1: buy
-  static readonly minTradeLen = 3; //minimum trade length in units of time
+  static readonly outputLookahead = 24; //Length of Future ChartData used for output evaulation
+  static readonly minTradeLen = 2; //Minimum number of Future ChartData heading to same direction for decision to be made
   static readonly decisionThreshold = 0.2; //minimum deviation from 0 where decision is made
   static readonly maxAmount = 20.0; //Max amount / leverage to buy&sell
   public net;
@@ -24,10 +25,9 @@ export default class Tracy implements Strategy {
 
   constructor(path?: string) {
     this.net = new NeuralNetwork({
-      activation: "tanh",
       inputSize: Tracy.inputSize,
       outputSize: Tracy.outputSize,
-      hiddenLayers: [32, 16],
+      hiddenLayers: [64, 32],
     });
     if (path) this.net.fromJSON(FileUtil.loadJSON(path, false));
   }
@@ -37,9 +37,9 @@ export default class Tracy implements Strategy {
     this.inputMinMax = sets.inputMinMax;
     this.outputMinMax = sets.outputMinMax;
     await this.net.trainAsync(sets.sets, {
-      learningRate: 0.002,
-      momentum: 0.6,
-      iterations: 30,
+      activation: "tanh",
+      learningRate: 0.0008,
+      errorThresh: 0.6,
       logPeriod: 1,
       log: true,
     });
@@ -55,7 +55,7 @@ export default class Tracy implements Strategy {
     inputMinMax: [number, number][];
     outputMinMax: [number, number];
   } {
-    if (arr.length < Tracy.inputRange + Tracy.minTradeLen)
+    if (arr.length < Tracy.inputRange + Tracy.outputLookahead)
       return {
         sets: [],
         inputMinMax: Array(Tracy.indicatorCount).fill([-1, 1]),
@@ -69,15 +69,23 @@ export default class Tracy implements Strategy {
     const sma20 = Indicators.sma(arr, 20);
     const ema20 = Indicators.ema(arr, 20);
     const tema20 = Indicators.tema(arr, 20);
+    const davg = Indicators.davg(arr);
     const bb = Indicators.bb(arr, 20);
-    const indicators = [closePrice, volume, sma20, ema20, tema20, bb.lower, bb.middle, bb.upper].slice(
+    const indicators = [closePrice, volume, sma20, ema20, tema20, davg, bb.lower, bb.middle, bb.upper].slice(
       0,
       Tracy.indicatorCount
     ); //Array(6).fill(Indicators.random(arr)) as IndicatorData[];
     const indicatorDiffs = indicators.map((id) => Indicators.diff(id));
-    inputMinMax ??= [...[...indicators, ...indicatorDiffs].map((id) => MathUtil.getMinMax(id.data.map((v) => v[1])))];
+    inputMinMax ??= [
+      ...[...indicators, ...indicatorDiffs].map((id) =>
+        MathUtil.getMinMax(
+          id.data.map((v) => v[1]),
+          true
+        )
+      ),
+    ];
     const maxDelay = Math.max(...[...indicators, ...indicatorDiffs].map((id) => id.delay));
-    for (let i = maxDelay + Tracy.inputRange - 1; i <= arr.length - (withoutOutputs ? 0 : Tracy.minTradeLen); i++) {
+    for (let i = maxDelay + Tracy.inputRange - 1; i <= arr.length - (withoutOutputs ? 0 : Tracy.outputLookahead); i++) {
       let input: number[] = [];
       for (let id = 0; id < indicators.length; id++) {
         const lastValue = indicators[id].data[i - 1][1];
@@ -90,12 +98,12 @@ export default class Tracy implements Strategy {
       inputs.push(input);
 
       let output: number = 0;
-      output = withoutOutputs ? 0 : Tracy.makePrediction(arr[i - 1], arr.slice(i, i + Tracy.minTradeLen));
+      output = withoutOutputs ? 0 : Tracy.averageDiffNext(arr[i - 1], arr.slice(i, i + Tracy.outputLookahead));
       outputs.push(output);
     }
     if (!withoutOutputs) {
-      outputMinMax ??= MathUtil.getMinMax(outputs);
-      outputs = MathUtil.normalizeSplit(outputs, 0, [-1, 1], outputMinMax).map((v) => MathUtil.saturation(v));
+      outputMinMax ??= MathUtil.getMinMax(outputs, true);
+      outputs = MathUtil.normalizeSplit(outputs, 0, [-1, 1], outputMinMax);
     }
     const sets = inputs.map((v, i) => ({ input: inputs[i], output: [outputs[i]] }));
     return {
@@ -112,7 +120,13 @@ export default class Tracy implements Strategy {
     return output[0];
   }
 
-  public averageDiffNext(lastValue: ChartData, nextValues: ChartData[]): number {
+  public static makeDecision(prediction: number, thresholdOverride?: number): -1.0 | 0.0 | 1.0 {
+    if (prediction > (thresholdOverride ?? Tracy.decisionThreshold)) return 1.0;
+    if (prediction < -(thresholdOverride ?? Tracy.decisionThreshold)) return -1.0;
+    return 0;
+  }
+
+  public static averageDiffNext(lastValue: ChartData, nextValues: ChartData[]): number {
     let diffSum = 0;
     for (let v of nextValues) {
       diffSum += (v.closePrice - lastValue.closePrice) / lastValue.closePrice;
@@ -120,33 +134,17 @@ export default class Tracy implements Strategy {
     return diffSum / nextValues.length > 0 ? 1.0 : -1.0;
   }
 
-  public static makeDecision(prediction: number, thresholdOverride?: number): -1.0 | 0.0 | 1.0 {
-    if (prediction > (thresholdOverride ?? Tracy.decisionThreshold)) return 1.0;
-    if (prediction < -(thresholdOverride ?? Tracy.decisionThreshold)) return -1.0;
-    return 0;
-  }
-
   public static makePrediction(lastValue: ChartData, nextValues: ChartData[]): number {
-    let buy = 0.0;
-    let sell = 0.0;
-    for (let v of nextValues) {
+    let output = 0;
+    for (let i = 0; i < nextValues.length; i++) {
+      const v = nextValues[i];
       const priceDiff = (v.closePrice - lastValue.closePrice) / lastValue.closePrice;
-      if (priceDiff > 0) {
-        buy += priceDiff / nextValues.length;
-      } else {
-        buy = 0.0;
+      if (i != 0 && Math.sign(output) != Math.sign(priceDiff)) {
+        if (i < Tracy.minTradeLen) output = 0;
         break;
       }
+      output += Math.sign(priceDiff) * ((nextValues.length - i) / nextValues.length);
     }
-    for (let v of nextValues) {
-      const priceDiff = (v.closePrice - lastValue.closePrice) / lastValue.closePrice;
-      if (priceDiff < 0) {
-        sell -= priceDiff / nextValues.length;
-      } else {
-        sell = 0.0;
-        break;
-      }
-    }
-    return buy - sell;
+    return output;
   }
 }

@@ -15,6 +15,8 @@ export default class Runner {
     private strats: {
       strat: Strategy;
       account: Account;
+      errorSum?: number;
+      runCount?: number;
       logMatrix?: { [index: string]: { [index: string]: number } };
     }[]
   ) {}
@@ -29,17 +31,19 @@ export default class Runner {
   ) {
     for (const strat of this.strats) {
       strat.logMatrix = Runner.createLogMatrix();
+      strat.errorSum = 0;
+      strat.runCount = 0;
     }
 
     const runPeriod = 100;
     const logInt = 1000;
     let logTimer = Date.now();
     let runs = 0;
-    for (let i = runPeriod; i < data.length - Tracy.minTradeLen; i++) {
+    for (let i = runPeriod; i < data.length - Tracy.outputLookahead; i++) {
       if (Date.now() - logTimer > logInt) {
         const time = Date.now() - logTimer;
         console.log(
-          `Simulating chart: ${i - runPeriod}/${data.length - Tracy.minTradeLen - runPeriod} (${MathUtil.round(
+          `Simulating chart: ${i - runPeriod}/${data.length - Tracy.outputLookahead - runPeriod} (${MathUtil.round(
             time / runs,
             2
           )}ms/run)`
@@ -50,7 +54,7 @@ export default class Runner {
       this.run(data.slice(Math.max(i - runPeriod + 1, 0), i + 1), {
         logFinance: options?.logFinance,
         logTechnical: options?.logTechnical,
-        nextData: data.slice(i + 1, i + 1 + Tracy.minTradeLen),
+        nextData: data.slice(i + 1, i + 1 + Tracy.outputLookahead),
         outputMinMax: options.outputMinMax,
       });
       runs++;
@@ -58,15 +62,17 @@ export default class Runner {
 
     for (const strat of this.strats) {
       strat.account.closeBuys(
-        data[data.length - Tracy.minTradeLen - 1].closePrice,
+        data[data.length - Tracy.outputLookahead - 1].closePrice,
         options?.logFinance ? strat.strat.name : undefined
       );
       strat.account.closeSells(
-        data[data.length - Tracy.minTradeLen - 1].closePrice,
+        data[data.length - Tracy.outputLookahead - 1].closePrice,
         options?.logFinance ? strat.strat.name : undefined
       );
       strat.account.logBalance();
       strat.account.resetProfit();
+      if (strat.errorSum !== undefined && strat.runCount !== undefined)
+        console.log(`${strat.strat.name} avg. abs. error: ${strat.errorSum / strat.runCount}`);
       console.table(strat.logMatrix);
     }
   }
@@ -86,9 +92,15 @@ export default class Runner {
     for (const strat of this.strats) {
       const actualOutput = strat.strat.run(range);
       const actualDecision = Tracy.makeDecision(actualOutput);
-      if (options?.logTechnical && options?.nextData)
-        console.log(`Actual: ${actualOutput} Expected: ${expectedOutput!}`);
-      if (strat.logMatrix && expectedDecision) Runner.logInMatrix(strat.logMatrix, expectedDecision, actualDecision);
+      if (options?.nextData) {
+        if (options?.logTechnical) console.log(`Actual: ${actualOutput} Expected: ${expectedOutput!}`);
+        if (strat.logMatrix) Runner.logInMatrix(strat.logMatrix, expectedDecision!, actualDecision);
+        if (strat.errorSum !== undefined && strat.runCount !== undefined) {
+          strat.errorSum += Math.abs(actualOutput - expectedOutput!);
+          strat.runCount++;
+        }
+      }
+
       const price = data[data.length - 1].closePrice;
       if (strat.account.amount <= 0) {
         strat.account.closeBuys(price, options?.logFinance ? strat.strat.name : undefined);
@@ -100,9 +112,9 @@ export default class Runner {
 
   private static createLogMatrix() {
     return {
-      expectedChill: { actualChill: 0, actualBuy: 0, actualSell: 0 },
-      expectedBuy: { actualChill: 0, actualBuy: 0, actualSell: 0 },
-      expectedSell: { actualChill: 0, actualBuy: 0, actualSell: 0 },
+      expectedChill: { total: 0, actualChill: 0, actualBuy: 0, actualSell: 0 },
+      expectedBuy: { total: 0, actualChill: 0, actualBuy: 0, actualSell: 0 },
+      expectedSell: { total: 0, actualChill: 0, actualBuy: 0, actualSell: 0 },
     };
   }
 
@@ -113,6 +125,7 @@ export default class Runner {
   ) {
     const map = (decision: 0 | 1 | -1) => (decision == 0 ? "Chill" : decision == 1 ? "Buy" : "Sell");
     mat["expected" + map(expectedDecision)]["actual" + map(actualDecision)]++;
+    mat["expected" + map(expectedDecision)].total++;
   }
 
   private static actOnPrediction(account: Account, prediction: number, price: number, log?: string) {

@@ -72,7 +72,7 @@ export default class TracyTF extends Tracy {
     inputMinMax: [number, number][];
     outputMinMax: [number, number];
   } {
-    if (arr.length < Tracy.inputRange + Tracy.minTradeLen)
+    if (arr.length < Tracy.inputRange + Tracy.outputLookahead)
       return {
         sets: { inputs: tf.tensor2d([]), outputs: tf.tensor1d([]) },
         inputMinMax: Array(Tracy.indicatorCount).fill([-1, 1]),
@@ -91,7 +91,7 @@ export default class TracyTF extends Tracy {
     const indicatorDiffs = indicators.map((id) => Indicators.diff(id));
     inputMinMax ??= [...[...indicators, ...indicatorDiffs].map((id) => MathUtil.getMinMax(id.data.map((v) => v[1])))];
     const maxDelay = Math.max(...[...indicators, ...indicatorDiffs].map((id) => id.delay));
-    for (let i = maxDelay + Tracy.inputRange; i <= arr.length - (withoutOutputs ? 0 : Tracy.minTradeLen); i++) {
+    for (let i = maxDelay + Tracy.inputRange; i <= arr.length - (withoutOutputs ? 0 : Tracy.outputLookahead); i++) {
       let input: number[] = [];
       for (let id = 0; id < indicators.length; id++) {
         const lastValue = indicators[id].data[i - 1][1];
@@ -104,7 +104,7 @@ export default class TracyTF extends Tracy {
       inputs.push(input);
 
       let output: number = 0;
-      output = withoutOutputs ? 0 : Tracy.makePrediction(arr[i - 1], arr.slice(i, i + Tracy.minTradeLen));
+      output = withoutOutputs ? 0 : Tracy.makePrediction(arr[i - 1], arr.slice(i, i + Tracy.outputLookahead));
       outputs.push(output);
     }
     if (!withoutOutputs) {
