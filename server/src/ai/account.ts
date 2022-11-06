@@ -37,14 +37,11 @@ export default class Account {
   private closePosition(price: number, index: number, log?: string): number {
     const pos = this.openPositions[index];
     const profit = pos.amount * (price - pos.openingPrice) * pos.type;
-    if (Number.isNaN(profit)) debugger;
     if (log) {
       let logF;
       if (profit >= 0) {
-        this.gain += profit;
         logF = chalk.green;
       } else {
-        this.loss -= profit;
         logF = chalk.red;
       }
       console.log(
@@ -53,6 +50,12 @@ export default class Account {
           `${pos.amount} x (${pos.openingPrice} -> ${price}) = ` +
           logF(`${(profit < 0 ? "" : "+") + profit}`)
       );
+    }
+
+    if (profit >= 0) {
+      this.gain += profit;
+    } else {
+      this.loss -= profit;
     }
     this.amount += profit + pos.amount;
     this.openPositions.splice(index, 1);

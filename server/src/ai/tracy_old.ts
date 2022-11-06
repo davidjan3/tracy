@@ -198,8 +198,8 @@ export default class Tracy {
       const range = values.slice(i, i + interval);
       const endPrice = range[interval - 1].endPrice;
       const volume = range.map((v) => v.volume).reduce((a, b) => a + b, 0);
-      const minPrice = Math.min(...range.map((v) => v.minPrice));
-      const maxPrice = Math.max(...range.map((v) => v.maxPrice));
+      const minPrice = MathUtil.min(range.map((v) => v.minPrice));
+      const maxPrice = MathUtil.max(range.map((v) => v.maxPrice));
       newValues.push({ endPrice: endPrice, minPrice: minPrice, maxPrice: maxPrice, volume: volume });
     }
     return newValues;

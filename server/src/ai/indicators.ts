@@ -124,6 +124,46 @@ export default class Indicators {
     };
   }
 
+  public static macd(
+    data: ChartData[],
+    fastPeriod: number = 24,
+    slowPeriod: number = 52,
+    signalPeriod: number = 18
+  ): { number: IndicatorData; signal: IndicatorData; histogram: IndicatorData } {
+    let res = ti.macd({
+      values: data.map((d) => d.closePrice),
+      fastPeriod: fastPeriod,
+      slowPeriod: slowPeriod,
+      signalPeriod: signalPeriod,
+      SimpleMAOscillator: false,
+      SimpleMASignal: false,
+    });
+    res = res.filter((v) => v.MACD !== undefined && v.histogram !== undefined && v.signal !== undefined);
+    const delay = data.length - res.length;
+    res = this.padArray(res, data.length);
+    const configSuffix = "FA" + fastPeriod + "SL" + slowPeriod + "SI" + signalPeriod;
+    return {
+      number: {
+        type: "macdNumber",
+        config: "macdNumber" + configSuffix,
+        data: res.map((v, i) => [data[i].ts, v.MACD!]),
+        delay: delay,
+      },
+      signal: {
+        type: "macdSignal",
+        config: "macdSignal" + configSuffix,
+        data: res.map((v, i) => [data[i].ts, v.signal!]),
+        delay: delay,
+      },
+      histogram: {
+        type: "macdHistogram",
+        config: "macdHistogram" + configSuffix,
+        data: res.map((v, i) => [data[i].ts, v.histogram!]),
+        delay: delay,
+      },
+    };
+  }
+
   public static davg(data: ChartData[]): IndicatorData {
     let res = data.map((v) => {
       const priceRange = v.maxPrice - v.minPrice;
@@ -168,7 +208,7 @@ export default class Indicators {
   }
 
   public static cutDelays(ids: IndicatorData[]): IndicatorData[] {
-    const maxDelay = Math.max(...ids.map((id) => id.delay));
+    const maxDelay = MathUtil.max(ids.map((id) => id.delay));
     let res = ids.map((id) => ({
       type: id.type,
       config: id.config,
@@ -185,8 +225,8 @@ export default class Indicators {
       const openPrice = range[0].openPrice;
       const closePrice = range[range.length - 1].closePrice;
       const volume = MathUtil.sum(range.map((v) => v.volume));
-      const minPrice = Math.min(...range.map((v) => v.minPrice));
-      const maxPrice = Math.max(...range.map((v) => v.maxPrice));
+      const minPrice = MathUtil.min(range.map((v) => v.minPrice));
+      const maxPrice = MathUtil.max(range.map((v) => v.maxPrice));
       newValues.push({
         ts: range[range.length - 1].ts,
         openPrice: openPrice,

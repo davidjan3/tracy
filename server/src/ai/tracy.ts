@@ -11,14 +11,16 @@ export type Sets = {
 
 export default class Tracy implements Strategy {
   public name = "Tracy";
-  static readonly inputRange = 24; //input length in units of time
-  static readonly indicatorCount = 9; //number of indicators used
+  static readonly inputRange = 12; //input length in units of time
+  static readonly indicatorCount = 12; //number of indicators used
   static readonly inputSize = this.indicatorCount * Tracy.inputRange; //8 indicators
   static readonly outputSize = 1; //-1: sell, +1: buy
   static readonly outputLookahead = 24; //Length of Future ChartData used for output evaulation
   static readonly minTradeLen = 2; //Minimum number of Future ChartData heading to same direction for decision to be made
   static readonly decisionThreshold = 0.2; //minimum deviation from 0 where decision is made
   static readonly maxAmount = 20.0; //Max amount / leverage to buy&sell
+  static readonly maxInidicatorDelay = 100;
+  static readonly inputLookahead = Tracy.maxInidicatorDelay + Tracy.inputRange;
   public net;
   public inputMinMax: [number, number][] | undefined;
   public outputMinMax: [number, number] | undefined;
@@ -27,7 +29,7 @@ export default class Tracy implements Strategy {
     this.net = new NeuralNetwork({
       inputSize: Tracy.inputSize,
       outputSize: Tracy.outputSize,
-      hiddenLayers: [64, 32],
+      hiddenLayers: [24, 12, 6],
     });
     if (path) this.net.fromJSON(FileUtil.loadJSON(path, false));
   }
@@ -39,8 +41,8 @@ export default class Tracy implements Strategy {
     await this.net.trainAsync(sets.sets, {
       activation: "tanh",
       learningRate: 0.0008,
-      errorThresh: 0.6,
-      logPeriod: 1,
+      iterations: 100,
+      logPeriod: 10,
       log: true,
     });
   }
@@ -66,15 +68,26 @@ export default class Tracy implements Strategy {
     let outputs: number[] = [];
     const closePrice = Indicators.meta(arr, "closePrice");
     const volume = Indicators.meta(arr, "volume");
-    const sma20 = Indicators.sma(arr, 20);
+    const sma100 = Indicators.sma(arr, 100);
     const ema20 = Indicators.ema(arr, 20);
     const tema20 = Indicators.tema(arr, 20);
     const davg = Indicators.davg(arr);
     const bb = Indicators.bb(arr, 20);
-    const indicators = [closePrice, volume, sma20, ema20, tema20, davg, bb.lower, bb.middle, bb.upper].slice(
-      0,
-      Tracy.indicatorCount
-    ); //Array(6).fill(Indicators.random(arr)) as IndicatorData[];
+    const macd = Indicators.macd(arr);
+    const indicators = [
+      closePrice,
+      volume,
+      sma100,
+      ema20,
+      tema20,
+      davg,
+      bb.lower,
+      bb.middle,
+      bb.upper,
+      macd.number,
+      macd.signal,
+      macd.histogram,
+    ].slice(0, Tracy.indicatorCount); //Array(6).fill(Indicators.random(arr)) as IndicatorData[];
     const indicatorDiffs = indicators.map((id) => Indicators.diff(id));
     inputMinMax ??= [
       ...[...indicators, ...indicatorDiffs].map((id) =>
@@ -98,7 +111,7 @@ export default class Tracy implements Strategy {
       inputs.push(input);
 
       let output: number = 0;
-      output = withoutOutputs ? 0 : Tracy.averageDiffNext(arr[i - 1], arr.slice(i, i + Tracy.outputLookahead));
+      output = withoutOutputs ? 0 : Tracy.makePrediction(arr[i - 1], arr.slice(i, i + Tracy.outputLookahead));
       outputs.push(output);
     }
     if (!withoutOutputs) {

@@ -90,7 +90,7 @@ export default class TracyTF extends Tracy {
     const indicators = [closePrice /*, volume*/ /*, sma20*/, ema20, tema20, bb.lower /*, bb.middle*/, bb.upper]; //Array(6).fill(Indicators.random(arr)) as IndicatorData[];
     const indicatorDiffs = indicators.map((id) => Indicators.diff(id));
     inputMinMax ??= [...[...indicators, ...indicatorDiffs].map((id) => MathUtil.getMinMax(id.data.map((v) => v[1])))];
-    const maxDelay = Math.max(...[...indicators, ...indicatorDiffs].map((id) => id.delay));
+    const maxDelay = MathUtil.max([...indicators, ...indicatorDiffs].map((id) => id.delay));
     for (let i = maxDelay + Tracy.inputRange; i <= arr.length - (withoutOutputs ? 0 : Tracy.outputLookahead); i++) {
       let input: number[] = [];
       for (let id = 0; id < indicators.length; id++) {

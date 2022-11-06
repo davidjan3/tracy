@@ -26,8 +26,20 @@ export default class MathUtil {
     return Math.round(val * 10 ** n) / 10 ** n;
   }
 
-  public static limSlice(arr: any[], from: number, to: number) {
-    return arr.slice(Math.min(from, 0), Math.min(to, 0));
+  public static min(arr: number[]): number {
+    let min = arr[0];
+    for (let i = 0; i < arr.length; i++) {
+      if (arr[i] < min) min = arr[i];
+    }
+    return min;
+  }
+
+  public static max(arr: number[]): number {
+    let min = arr[0];
+    for (let i = 0; i < arr.length; i++) {
+      if (arr[i] > min) min = arr[i];
+    }
+    return min;
   }
 
   public static getMinMax(arr: number[], cutOff: boolean = false): [number, number] {
@@ -37,8 +49,8 @@ export default class MathUtil {
       const diff = MathUtil.getStandardDeviation(arr, avg) * 3;
       arr = arr.filter((v) => v > avg - diff && v < avg + diff);
     }
-    min = Math.min(...arr);
-    max = Math.max(...arr);
+    min = MathUtil.min(arr);
+    max = MathUtil.max(arr);
     return [min, max];
   }
 

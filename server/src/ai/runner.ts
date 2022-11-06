@@ -35,7 +35,7 @@ export default class Runner {
       strat.runCount = 0;
     }
 
-    const runPeriod = 100;
+    const runPeriod = Tracy.inputLookahead;
     const logInt = 1000;
     let logTimer = Date.now();
     let runs = 0;
@@ -81,8 +81,7 @@ export default class Runner {
     data: ChartData[],
     options?: { nextData?: ChartData[]; logFinance?: boolean; logTechnical?: boolean; outputMinMax?: [number, number] }
   ) {
-    const period = 100;
-    const range = data.length > period ? data.slice(-period) : data;
+    const range = data.length > Tracy.inputLookahead ? data.slice(-Tracy.inputLookahead) : data;
     let expectedOutput = options?.nextData ? Tracy.makePrediction(data[data.length - 1], options.nextData) : undefined;
     if (options?.nextData && options?.outputMinMax)
       expectedOutput = MathUtil.saturation(
