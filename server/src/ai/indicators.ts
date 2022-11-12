@@ -1,5 +1,6 @@
 import MathUtil from "util/MathUtil";
 import * as ti from "technicalindicators";
+import Tracy from "./tracy";
 
 export type ChartData = {
   ts: number;
@@ -194,6 +195,21 @@ export default class Indicators {
     return {
       type: "cpr",
       config: "cpr",
+      data: res,
+      delay: 0,
+    };
+  }
+
+  public static horoscope(data: ChartData[]): IndicatorData {
+    const res = data.map((v, i) => {
+      if (i < data.length - Tracy.outputLookahead) {
+        return [v.ts, Tracy.makePrediction(v, data.slice(i + 1, i + Tracy.outputLookahead + 1))];
+      }
+      return [v.ts, 0];
+    });
+    return {
+      type: "horoscope",
+      config: "horoscope",
       data: res,
       delay: 0,
     };

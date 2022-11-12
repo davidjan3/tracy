@@ -3,6 +3,7 @@ import Tracy from "ai/tracy";
 import FileUtil from "util/FileUtil";
 import Runner from "ai/runner";
 import { ChartData } from "ai/indicators";
+import { Horoscope } from "ai/strats";
 
 async function main() {
   const NEW = true;
@@ -51,7 +52,7 @@ for (let i = 0; i < testSets.length / step; i++) {
 }
 
 async function test() {
-  const interval = "60min";
+  const interval = "5min";
   const history = FileUtil.loadJSON("data/" + interval + "_btc.json") as {
     ts: number;
     openPrice: number;
@@ -60,8 +61,8 @@ async function test() {
     minPrice: number;
     volume: number;
   }[];
-  history.splice(0, history.length * 0.2);
-  const trainData = history.splice(Math.floor(history.length * 0.5), history.length);
+  history.splice(0, history.length * 0.6);
+  const trainData = history.splice(0, Math.floor(history.length * 0.5));
   console.log("History parsed");
 
   const tracy = new Tracy();
@@ -69,12 +70,13 @@ async function test() {
 
   const strats = [
     { strat: tracy, account: new Account(1000) },
+    //{ strat: new Horoscope(), account: new Account(1000) },
     //{ strat: new MA(), account: new Account(1000) },
   ];
-  const rTrain = new Runner(strats);
-  rTrain.simulateChart(trainData, { logTechnical: false, outputMinMax: tracy.outputMinMax });
-  const rTest = new Runner(strats);
-  rTest.simulateChart(history, { logTechnical: false, outputMinMax: tracy.outputMinMax });
+  const runner = new Runner(strats);
+  runner.simulateChart(trainData, { logTechnical: false, outputMinMax: tracy.outputMinMax });
+  strats.forEach((s) => (s.account.amount = 1000));
+  runner.simulateChart(history, { logTechnical: false, outputMinMax: tracy.outputMinMax });
 }
 
 test();

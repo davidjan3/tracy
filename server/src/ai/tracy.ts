@@ -11,13 +11,13 @@ export type Sets = {
 
 export default class Tracy implements Strategy {
   public name = "Tracy";
-  static readonly inputRange = 12; //input length in units of time
+  static readonly inputRange = 3; //input length in units of time
   static readonly indicatorCount = 12; //number of indicators used
   static readonly inputSize = this.indicatorCount * Tracy.inputRange; //8 indicators
   static readonly outputSize = 1; //-1: sell, +1: buy
   static readonly outputLookahead = 24; //Length of Future ChartData used for output evaulation
-  static readonly minTradeLen = 2; //Minimum number of Future ChartData heading to same direction for decision to be made
-  static readonly decisionThreshold = 0.2; //minimum deviation from 0 where decision is made
+  static readonly minTradeLen = 4; //Minimum number of Future ChartData heading to same direction for decision to be made
+  static readonly decisionThreshold = 0.4; //minimum deviation from 0 where decision is made
   static readonly maxAmount = 20.0; //Max amount / leverage to buy&sell
   static readonly maxInidicatorDelay = 100;
   static readonly inputLookahead = Tracy.maxInidicatorDelay + Tracy.inputRange;
@@ -29,7 +29,7 @@ export default class Tracy implements Strategy {
     this.net = new NeuralNetwork({
       inputSize: Tracy.inputSize,
       outputSize: Tracy.outputSize,
-      hiddenLayers: [24, 12, 6],
+      hiddenLayers: [24, 12],
     });
     if (path) this.net.fromJSON(FileUtil.loadJSON(path, false));
   }
@@ -40,9 +40,10 @@ export default class Tracy implements Strategy {
     this.outputMinMax = sets.outputMinMax;
     await this.net.trainAsync(sets.sets, {
       activation: "tanh",
-      learningRate: 0.0008,
+      learningRate: 0.08,
       iterations: 100,
-      logPeriod: 10,
+      logPeriod: 1,
+      errorThresh: 0.2,
       log: true,
     });
   }
@@ -149,15 +150,17 @@ export default class Tracy implements Strategy {
 
   public static makePrediction(lastValue: ChartData, nextValues: ChartData[]): number {
     let output = 0;
-    for (let i = 0; i < nextValues.length; i++) {
-      const v = nextValues[i];
-      const priceDiff = (v.closePrice - lastValue.closePrice) / lastValue.closePrice;
-      if (i != 0 && Math.sign(output) != Math.sign(priceDiff)) {
+    const diffs = nextValues.map((v) => v.closePrice - lastValue.closePrice);
+    const max = MathUtil.getMaxDeviation(diffs, 0);
+    if (max == 0) return 0;
+    for (let i = 0; i < diffs.length; i++) {
+      const d = diffs[i];
+      if (i != 0 && Math.sign(output) != Math.sign(d)) {
         if (i < Tracy.minTradeLen) output = 0;
         break;
       }
-      output += Math.sign(priceDiff) * ((nextValues.length - i) / nextValues.length);
+      output += (0.6 * Math.sign(d) + 0.4 * (d / max)) * Math.pow(0.85, i + 1);
     }
-    return output;
+    return output / 6;
   }
 }

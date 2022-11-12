@@ -1,4 +1,5 @@
 import chalk from "chalk";
+import MathUtil from "util/MathUtil";
 
 export default class Account {
   public amount: number;
@@ -78,9 +79,11 @@ export default class Account {
     const logF = profit < 0 ? chalk.red : chalk.green;
     console.log(
       chalk.bold(
-        `Balance: ${this.amount}, Profit: ${chalk.green("+" + this.gain)} ${chalk.red("-" + this.loss)} (${chalk.blue(
-          Math.round((this.gain / (this.gain + this.loss)) * 100) + "%"
-        )}) = ${logF((profit < 0 ? "" : "+") + profit)}`
+        `Balance: ${this.amount}, Profit: ${chalk.green("+" + MathUtil.money(this.gain))} ${chalk.red(
+          "-" + MathUtil.money(this.loss)
+        )} (${chalk.blue(MathUtil.round((this.gain / (this.gain + this.loss)) * 100, 2) + "%")}) = ${logF(
+          (profit < 0 ? "" : "+") + MathUtil.money(profit)
+        )}`
       )
     );
   }

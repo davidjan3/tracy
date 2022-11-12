@@ -17,10 +17,11 @@ FileUtil.saveJSON("data/" + interval + "min_btc.json", history, false);
 debugger;
 
 let ids: IndicatorData[] = [
-  Indicators.meta(history, "closePrice"),
+  /*Indicators.meta(history, "closePrice"),
   Indicators.sma(history, 20),
   Indicators.ema(history, 20),
-  Indicators.tema(history, 20),
+  Indicators.tema(history, 20),*/
+  Indicators.horoscope(history),
 ];
 
 ids = Indicators.cutDelays(ids);

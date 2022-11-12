@@ -5,7 +5,7 @@
   "main": "./server/build/server.js",
   "private": true,
   "engines": {
-    "node": "16.17.1"
+    "node": "18.0.0"
   },
   "scripts": {
     "start": "cross-env NODE_PATH=./server/build node --trace-warnings server/build/server.js",
@@ -22,7 +22,6 @@
     "chalk": "^4.1.2",
     "cross-env": "^7.0.3",
     "echarts": "^5.4.0",
-    "gpu.js": "^2.15.2",
     "technicalindicators": "^3.1.0"
   },
   "devDependencies": {

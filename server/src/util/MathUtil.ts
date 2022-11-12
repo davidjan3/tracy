@@ -83,4 +83,8 @@ export default class MathUtil {
   public static nrtSign(val: number, n: number) {
     return Math.pow(Math.abs(val), 1 / n) * Math.sign(val);
   }
+
+  public static money(n: number, currencyCode: string = "USD") {
+    return n.toLocaleString("en-US", { currency: currencyCode, style: "currency" });
+  }
 }
