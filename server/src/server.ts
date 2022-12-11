@@ -52,7 +52,7 @@ for (let i = 0; i < testSets.length / step; i++) {
 }
 
 async function test() {
-  const interval = "5min";
+  const interval = "60min";
   const history = FileUtil.loadJSON("data/" + interval + "_btc.json") as {
     ts: number;
     openPrice: number;
@@ -61,7 +61,7 @@ async function test() {
     minPrice: number;
     volume: number;
   }[];
-  history.splice(0, history.length * 0.6);
+  history.splice(0, history.length * 0.2);
   const trainData = history.splice(0, Math.floor(history.length * 0.5));
   console.log("History parsed");
 

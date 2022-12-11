@@ -11,7 +11,7 @@ export type Sets = {
 
 export default class Tracy implements Strategy {
   public name = "Tracy";
-  static readonly inputRange = 3; //input length in units of time
+  static readonly inputRange = 8; //input length in units of time
   static readonly indicatorCount = 12; //number of indicators used
   static readonly inputSize = this.indicatorCount * Tracy.inputRange; //8 indicators
   static readonly outputSize = 1; //-1: sell, +1: buy
@@ -29,7 +29,7 @@ export default class Tracy implements Strategy {
     this.net = new NeuralNetwork({
       inputSize: Tracy.inputSize,
       outputSize: Tracy.outputSize,
-      hiddenLayers: [24, 12],
+      hiddenLayers: [32, 16, 8],
     });
     if (path) this.net.fromJSON(FileUtil.loadJSON(path, false));
   }
@@ -40,7 +40,7 @@ export default class Tracy implements Strategy {
     this.outputMinMax = sets.outputMinMax;
     await this.net.trainAsync(sets.sets, {
       activation: "tanh",
-      learningRate: 0.08,
+      learningRate: 0.004,
       iterations: 100,
       logPeriod: 1,
       errorThresh: 0.2,
@@ -103,16 +103,18 @@ export default class Tracy implements Strategy {
       let input: number[] = [];
       for (let id = 0; id < indicators.length; id++) {
         const lastValue = indicators[id].data[i - 1][1];
-        const prevDiffs = indicatorDiffs[id].data.slice(i - Tracy.inputRange + 1, i).map((v) => v[1]);
+        const prevDiffs = indicators[id].data.slice(i - Tracy.inputRange, i - 1).map((v) => v[1]);
         input.push(
-          ...MathUtil.normalizeSplit(prevDiffs, 0, [-1, 1], inputMinMax[id + indicators.length]),
+          ...MathUtil.normalizeSplit(prevDiffs, 0, [-1, 1], inputMinMax[id]),
           MathUtil.normalize([lastValue], [-1, 1], inputMinMax[id])[0]
         );
       }
       inputs.push(input);
 
       let output: number = 0;
-      output = withoutOutputs ? 0 : Tracy.makePrediction(arr[i - 1], arr.slice(i, i + Tracy.outputLookahead));
+      output = withoutOutputs
+        ? 0
+        : Tracy.makeDecision(Tracy.makePrediction(arr[i - 1], arr.slice(i, i + Tracy.outputLookahead)));
       outputs.push(output);
     }
     if (!withoutOutputs) {
